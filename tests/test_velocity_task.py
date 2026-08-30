@@ -2,7 +2,7 @@
 
 import pytest
 
-from mjlab.asset_zoo.robots import G1_ACTION_SCALE, GO1_ACTION_SCALE
+from mjlab.asset_zoo.robots import G1_ACTION_SCALE, G23_ACTION_SCALE, GO1_ACTION_SCALE
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.tasks.registry import list_tasks, load_env_cfg
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
@@ -24,6 +24,12 @@ def g1_velocity_task_ids(velocity_task_ids: list[str]) -> list[str]:
 def go1_velocity_task_ids(velocity_task_ids: list[str]) -> list[str]:
   """Get all Go1 velocity task IDs."""
   return [t for t in velocity_task_ids if "Go1" in t]
+
+
+@pytest.fixture(scope="module")
+def g23_velocity_task_ids(velocity_task_ids: list[str]) -> list[str]:
+  """Get all G23 velocity task IDs."""
+  return [t for t in velocity_task_ids if "G23" in t]
 
 
 @pytest.fixture(scope="module")
@@ -88,6 +94,24 @@ def test_go1_velocity_has_required_sensors(go1_velocity_task_ids: list[str]) -> 
         assert name in sensor_names, f"Task {task_id} missing {name} sensor"
 
 
+def test_g23_velocity_has_required_sensors(g23_velocity_task_ids: list[str]) -> None:
+  """G23 velocity tasks should have feet/ground and collision sensors."""
+  for task_id in g23_velocity_task_ids:
+    cfg = load_env_cfg(task_id)
+
+    assert cfg.scene.sensors is not None, f"Task {task_id} has no sensors"
+
+    sensor_names = {s.name for s in cfg.scene.sensors}
+    for name in (
+      "feet_ground_contact",
+      "self_collision",
+      "thigh_ground_touch",
+      "shank_ground_touch",
+      "torso_ground_touch",
+    ):
+      assert name in sensor_names, f"Task {task_id} missing {name} sensor"
+
+
 def test_flat_velocity_tasks_have_plane_terrain(
   flat_velocity_task_ids: list[str],
 ) -> None:
@@ -126,6 +150,8 @@ def test_rough_velocity_training_has_curriculum_enabled() -> None:
   rough_training_tasks = [
     "Mjlab-Velocity-Rough-Unitree-G1",
     "Mjlab-Velocity-Rough-Unitree-Go1",
+    "Mjlab-Velocity-Rough-SyncAI-G23",
+    "Mjlab-Velocity-Rough-SyncAI-G23-Proprio",
   ]
 
   for task_id in rough_training_tasks:
@@ -146,6 +172,8 @@ def test_rough_velocity_play_has_curriculum_disabled() -> None:
   rough_training_tasks = [
     "Mjlab-Velocity-Rough-Unitree-G1",
     "Mjlab-Velocity-Rough-Unitree-Go1",
+    "Mjlab-Velocity-Rough-SyncAI-G23",
+    "Mjlab-Velocity-Rough-SyncAI-G23-Proprio",
   ]
 
   for task_id in rough_training_tasks:
@@ -197,3 +225,91 @@ def test_go1_velocity_has_correct_action_scale(
     assert joint_pos_action.scale == GO1_ACTION_SCALE, (
       f"Task {task_id} action scale mismatch, expected GO1_ACTION_SCALE"
     )
+
+
+def test_g23_velocity_has_correct_action_scale(
+  g23_velocity_task_ids: list[str],
+) -> None:
+  """G23 velocity tasks should use G23_ACTION_SCALE."""
+  for task_id in g23_velocity_task_ids:
+    cfg = load_env_cfg(task_id)
+
+    assert "joint_pos" in cfg.actions, f"Task {task_id} missing 'joint_pos' action"
+
+    joint_pos_action = cfg.actions["joint_pos"]
+    assert isinstance(joint_pos_action, JointPositionActionCfg), (
+      f"Task {task_id} joint_pos action is not JointPositionActionCfg"
+    )
+
+    assert joint_pos_action.scale == G23_ACTION_SCALE, (
+      f"Task {task_id} action scale mismatch, expected G23_ACTION_SCALE"
+    )
+
+
+def test_g23_proprio_actor_observation_order_matches_rl_train() -> None:
+  """The proprioceptive G23 task should match RL-train policy observation order."""
+  original_cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23")
+  proprio_cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio")
+
+  original_actor_terms = list(original_cfg.observations["actor"].terms)
+  assert "base_lin_vel" in original_actor_terms
+  assert "height_scan" in original_actor_terms
+
+  assert list(proprio_cfg.observations["actor"].terms) == [
+    "base_ang_vel",
+    "projected_gravity",
+    "command",
+    "joint_pos",
+    "joint_vel",
+    "actions",
+  ]
+
+
+def test_g23_stair_training_third_parameters() -> None:
+  """G23 stair-focused training should keep commands and terrain scoped."""
+  cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio")
+
+  generator = cfg.scene.terrain.terrain_generator
+  assert generator is not None
+  proportions = {
+    name: generator.sub_terrains[name].proportion
+    for name in (
+      "flat",
+      "pyramid_stairs",
+      "pyramid_stairs_inv",
+      "hf_pyramid_slope",
+      "hf_pyramid_slope_inv",
+      "random_rough",
+      "wave_terrain",
+    )
+  }
+  assert proportions == pytest.approx(
+    {
+      "flat": 0.10,
+      "pyramid_stairs": 0.40,
+      "pyramid_stairs_inv": 0.40,
+      "hf_pyramid_slope": 0.025,
+      "hf_pyramid_slope_inv": 0.025,
+      "random_rough": 0.05,
+      "wave_terrain": 0.00,
+    }
+  )
+
+  twist_cmd = cfg.commands["twist"]
+  assert isinstance(twist_cmd, UniformVelocityCommandCfg)
+  assert twist_cmd.ranges.lin_vel_x == (-1.5, 1.5)
+
+  stages = cfg.curriculum["command_vel"].params["velocity_stages"]
+  assert stages[-1]["lin_vel_x"] == (-1.5, 1.5)
+  for stage in stages:
+    lin_vel_x = stage["lin_vel_x"]
+    assert lin_vel_x[0] >= -1.5
+    assert lin_vel_x[1] <= 1.5
+
+  shank_reward = cfg.rewards["shank_collision"]
+  assert shank_reward.weight == -0.25
+  assert shank_reward.params["force_threshold"] == 10.0
+
+  shank_termination = cfg.terminations["shank_illegal_contact"]
+  assert shank_termination.params["force_threshold"] == 120.0
+  assert shank_termination.params["history_count_threshold"] == 3

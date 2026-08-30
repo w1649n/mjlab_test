@@ -18,13 +18,25 @@ def illegal_contact(
   env: ManagerBasedRlEnv,
   sensor_name: str,
   force_threshold: float = 10.0,
+  history_count_threshold: int = 1,
 ) -> torch.Tensor:
+  """Terminate when contact exceeds a force threshold.
+
+  With force history, ``history_count_threshold`` requires contact to exceed
+  the threshold for that many consecutive history samples.
+  """
   sensor: ContactSensor = env.scene[sensor_name]
   data = sensor.data
   if data.force_history is not None:
     # force_history: [B, N, H, 3]
     force_mag = torch.norm(data.force_history, dim=-1)  # [B, N, H]
-    return (force_mag > force_threshold).any(dim=-1).any(dim=-1)  # [B]
+    hit = (force_mag > force_threshold).any(dim=1)  # [B, H]
+    if history_count_threshold <= 1:
+      return hit.any(dim=-1)  # [B]
+    if history_count_threshold > hit.shape[-1]:
+      return torch.zeros(hit.shape[0], device=hit.device, dtype=torch.bool)
+    hit_windows = hit.unfold(-1, history_count_threshold, 1)  # [B, W, C]
+    return hit_windows.all(dim=-1).any(dim=-1)  # [B]
   assert data.found is not None
   return torch.any(data.found, dim=-1)
 
