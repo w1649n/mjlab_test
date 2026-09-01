@@ -47,8 +47,8 @@ G23_HIP_ACTUATOR = BuiltinPositionActuatorCfg(
   stiffness=30.0,
   damping=1.0,
   effort_limit=24.0,
-  # Keep the reflected inertia declared by the active MJCF.
-  armature=None,
+  # Match the zero armature used by the source URDF and GaitRL configuration.
+  armature=0.0,
   delay_min_lag=0,
   delay_max_lag=1,
 )
@@ -58,8 +58,8 @@ G23_KNEE_ACTUATOR = BuiltinPositionActuatorCfg(
   stiffness=30.0,
   damping=1.0,
   effort_limit=36.0,
-  # Keep the reflected inertia declared by the active MJCF.
-  armature=None,
+  # Match the zero armature used by the source URDF and GaitRL configuration.
+  armature=0.0,
   delay_min_lag=0,
   delay_max_lag=1,
 )

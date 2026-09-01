@@ -74,6 +74,7 @@ import time
 import traceback
 from abc import ABC, abstractmethod
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import TYPE_CHECKING, Any, Optional, Protocol
@@ -141,6 +142,7 @@ class ViewerAction(Enum):
   TOGGLE_PLOTS = "toggle_plots"
   TOGGLE_DEBUG_VIS = "toggle_debug_vis"
   TOGGLE_SHOW_ALL_ENVS = "toggle_show_all_envs"
+  CALLBACK = "callback"
   FETCH_CHECKPOINT = "fetch_checkpoint"
   CUSTOM = "custom"
 
@@ -234,6 +236,10 @@ class BaseViewer(ABC):
 
   def request_reset_speed(self) -> None:
     self._actions.append((ViewerAction.RESET_SPEED, None))
+
+  def request_callback(self, callback: Callable[[], None]) -> None:
+    """Run *callback* on the viewer's main loop before the next policy step."""
+    self._actions.append((ViewerAction.CALLBACK, callback))
 
   def request_action(self, name: str, payload: Optional[Any] = None) -> None:
     try:
@@ -362,6 +368,16 @@ class BaseViewer(ABC):
         self.increase_speed()
       elif action == ViewerAction.SPEED_DOWN:
         self.decrease_speed()
+      elif action == ViewerAction.CALLBACK and callable(payload):
+        try:
+          payload()
+        except Exception:
+          self._last_error = traceback.format_exc()
+          self.log(
+            f"[ERROR] Exception during viewer callback:\n{self._last_error}",
+            VerbosityLevel.SILENT,
+          )
+          self.pause()
       else:
         _ = self._handle_custom_action(action, payload)
 

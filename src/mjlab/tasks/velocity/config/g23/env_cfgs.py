@@ -122,7 +122,8 @@ def _tune_g23_locomotion_curriculum(cfg: ManagerBasedRlEnvCfg) -> None:
   assert isinstance(twist_cmd, UniformVelocityCommandCfg)
 
   #first parameter: twist_cmd.rel_forward_envs = 0.2
-  twist_cmd.rel_forward_envs = 0.6  # second parameter
+  # twist_cmd.rel_forward_envs = 0.6  # second parameter
+  twist_cmd.rel_forward_envs = 0.4  # fourth parameter
   #first parameter: twist_cmd.rel_heading_envs = 0.3
   twist_cmd.rel_heading_envs = 0.1  # second parameter
   #second parameter: twist_cmd.ranges.lin_vel_x inherited base range before curriculum

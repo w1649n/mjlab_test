@@ -623,6 +623,31 @@ def test_delay_buffer_not_double_pushed(mock_env, simple_obs_func):
   assert delay_buffer._buffer.current_length[0].item() == 3
 
 
+def test_cache_invalidation_does_not_advance_delay_buffer(mock_env, simple_obs_func):
+  """Refreshing a stale cache must not count as another sensor sample."""
+  cfg = {
+    "actor": ObservationGroupCfg(
+      terms={
+        "obs1": ObservationTermCfg(
+          func=simple_obs_func, params={}, delay_min_lag=2, delay_max_lag=2
+        ),
+      }
+    ),
+  }
+  manager = ObservationManager(cfg, mock_env)
+  delay_buffer = manager._group_obs_term_delay_buffer["actor"]["obs1"]
+
+  manager.compute(update_history=True)
+  length_before = delay_buffer._buffer.current_length.clone()
+  step_before = delay_buffer._step_count.clone()
+
+  manager.invalidate_cache()
+  manager.compute(update_history=False)
+
+  assert torch.equal(delay_buffer._buffer.current_length, length_before)
+  assert torch.equal(delay_buffer._step_count, step_before)
+
+
 def test_cache_invalidated_on_reset(mock_env, simple_obs_func):
   """Test that observation cache is invalidated when environments are reset."""
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+import math
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -53,9 +54,99 @@ class UniformVelocityCommand(CommandTerm):
     self._joystick_sliders: list[viser.GuiSliderHandle] = []
     self._joystick_get_env_idx: Callable[[], int] | None = None
 
+    # Populated only during interactive play. The Python set keeps the regular
+    # training compute path free from device synchronization.
+    self._manual_env_ids: set[int] = set()
+    self._manual_env_ids_tensor: torch.Tensor | None = None
+    self._manual_command_b = torch.zeros_like(self.vel_command_b)
+
   @property
   def command(self) -> torch.Tensor:
     return self.vel_command_b
+
+  def set_manual_command(
+    self, env_idx: int, command: Sequence[float] | None
+  ) -> tuple[float, float, float] | None:
+    """Set a body-frame command for one env, or ``None`` for random mode.
+
+    Call this on the simulation thread. ``play`` routes terminal input through the
+    viewer action queue before invoking it.
+    """
+    if not 0 <= env_idx < self.num_envs:
+      raise IndexError(
+        f"Environment index {env_idx} is outside [0, {self.num_envs - 1}]."
+      )
+    if command is None:
+      if env_idx not in self._manual_env_ids:
+        return None
+      self._manual_env_ids.remove(env_idx)
+      self._refresh_manual_env_ids()
+      env_ids = torch.tensor([env_idx], dtype=torch.long, device=self.device)
+      self._resample(env_ids)
+      self._update_command(env_ids)
+      self._apply_manual_commands()
+      self._disable_joystick_override()
+      self._invalidate_observation_cache()
+      return None
+    if len(command) != 3:
+      raise ValueError(
+        f"Manual velocity command must have 3 values, got {len(command)}."
+      )
+
+    values = (float(command[0]), float(command[1]), float(command[2]))
+    if not all(math.isfinite(value) for value in values):
+      raise ValueError("Manual velocity command values must be finite.")
+    ranges = (
+      self.cfg.ranges.lin_vel_x,
+      self.cfg.ranges.lin_vel_y,
+      self.cfg.ranges.ang_vel_z,
+    )
+    clamped = (
+      max(ranges[0][0], min(values[0], ranges[0][1])),
+      max(ranges[1][0], min(values[1], ranges[1][1])),
+      max(ranges[2][0], min(values[2], ranges[2][1])),
+    )
+    self._manual_command_b[env_idx] = torch.tensor(
+      clamped, dtype=self.vel_command_b.dtype, device=self.device
+    )
+    self._manual_env_ids.add(env_idx)
+    self._refresh_manual_env_ids()
+
+    # Manual commands are body-frame setpoints and take precedence over every
+    # random-command subtype.
+    self.is_heading_env[env_idx] = False
+    self.is_standing_env[env_idx] = False
+    self.is_world_env[env_idx] = False
+    self.is_forward_env[env_idx] = False
+    self.vel_command_b[env_idx] = self._manual_command_b[env_idx]
+    self.vel_command_w[env_idx] = self._manual_command_b[env_idx]
+    self._disable_joystick_override()
+    self._invalidate_observation_cache()
+    return clamped
+
+  def _disable_joystick_override(self) -> None:
+    if self._joystick_enabled is not None and self._joystick_enabled.value:
+      self._joystick_enabled.value = False
+
+  def _invalidate_observation_cache(self) -> None:
+    observation_manager = getattr(self._env, "observation_manager", None)
+    if observation_manager is not None:
+      observation_manager.invalidate_cache()
+
+  def _refresh_manual_env_ids(self) -> None:
+    if self._manual_env_ids:
+      self._manual_env_ids_tensor = torch.tensor(
+        sorted(self._manual_env_ids), dtype=torch.long, device=self.device
+      )
+    else:
+      self._manual_env_ids_tensor = None
+
+  def _apply_manual_commands(self) -> None:
+    env_ids = self._manual_env_ids_tensor
+    if env_ids is None:
+      return
+    self.vel_command_b[env_ids] = self._manual_command_b[env_ids]
+    self.vel_command_w[env_ids] = self._manual_command_b[env_ids]
 
   def _update_metrics(self) -> None:
     max_command_time = self.cfg.resampling_time_range[1]
@@ -99,6 +190,7 @@ class UniformVelocityCommand(CommandTerm):
 
   def reset(self, env_ids: torch.Tensor | slice | None) -> dict[str, float]:
     extras = super().reset(env_ids)
+    self._apply_manual_commands()
     if self.cfg.init_velocity_prob > 0.0:
       assert isinstance(env_ids, torch.Tensor)
       r = torch.empty(len(env_ids), device=self.device)
@@ -202,6 +294,7 @@ class UniformVelocityCommand(CommandTerm):
     self, dt: float | torch.Tensor, env_ids: torch.Tensor | None = None
   ) -> None:
     super().compute(dt, env_ids)
+    self._apply_manual_commands()
     if self._joystick_enabled is not None and self._joystick_enabled.value:
       assert self._joystick_get_env_idx is not None
       idx = self._joystick_get_env_idx()

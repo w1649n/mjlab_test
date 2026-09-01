@@ -236,6 +236,10 @@ class ObservationManager(ManagerBase):
     index = self._group_obs_term_names[group_name].index(term_name)
     return self._group_obs_term_cfgs[group_name][index]
 
+  def invalidate_cache(self) -> None:
+    """Force the next non-history-updating compute to rebuild observations."""
+    self._obs_buffer = None
+
   def reset(self, env_ids: torch.Tensor | slice | None = None) -> dict[str, float]:
     # Invalidate cache since reset envs will have different observations.
     self._obs_buffer = None
@@ -363,7 +367,12 @@ class ObservationManager(ManagerBase):
 
       if term_cfg.delay_max_lag > 0:
         delay_buffer = self._group_obs_term_delay_buffer[group_name][term_name]
-        if env_ids is None or not delay_buffer.is_initialized:
+        if not delay_buffer.is_initialized:
+          delay_buffer.append(obs)
+          obs = delay_buffer.compute()
+        elif not update_history:
+          obs = delay_buffer.peek()
+        elif env_ids is None:
           delay_buffer.append(obs)
           obs = delay_buffer.compute()
         else:

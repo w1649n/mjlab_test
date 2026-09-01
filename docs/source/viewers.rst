@@ -38,6 +38,44 @@ or ``--agent random`` to use a dummy policy:
     uv run play Mjlab-Velocity-Flat-Unitree-G1 --agent zero --viewer viser
 
 
+Terminal velocity commands
+--------------------------
+
+For velocity tasks, ``play`` reads command controls from the terminal while
+either viewer is running. Focus the terminal where ``play`` was launched; keys
+are read immediately and do not require Enter. Commands remain random until a
+manual key is pressed.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 82
+
+   * - Key
+     - Action
+   * - ``M``
+     - Toggle the selected environment between random and manual commands.
+   * - ``W`` / ``S``
+     - Increase or decrease forward velocity.
+   * - ``A`` / ``D``
+     - Increase leftward or rightward velocity.
+   * - ``Q`` / ``E``
+     - Increase left or right yaw rate.
+   * - ``Space`` / ``X``
+     - Enter manual mode and zero all three command axes. ``X`` is an alias for
+       ``Space``.
+   * - ``R``
+     - Reset the robot.
+
+Each key press changes the setpoint by ``0.1`` by default and clamps it to the
+task's configured command ranges. Set another increment with
+``--terminal-command-step`` or disable terminal capture with
+``--terminal-commands False``. Returning to random mode immediately samples a
+new command. With multiple environments, each environment retains its own
+manual setpoint as the viewer selection changes. A terminal command disables
+an active Viser joystick override so the command shown in the terminal is the
+one sent to the policy; the joystick can be enabled again afterward.
+
+
 Viewer configuration
 --------------------
 

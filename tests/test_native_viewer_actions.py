@@ -38,3 +38,14 @@ def test_prev_next_env_actions_wrap_and_succeed():
   assert v.env_idx == 2
   assert v._handle_custom_action(ViewerAction.NEXT_ENV, None)
   assert v.env_idx == 0
+
+
+def test_requested_callback_runs_on_main_action_loop():
+  callback = MagicMock()
+  v = _make_viewer()
+
+  v.request_callback(callback)
+  callback.assert_not_called()
+
+  v._process_actions()
+  callback.assert_called_once_with()

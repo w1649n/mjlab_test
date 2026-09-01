@@ -200,6 +200,73 @@ choose_option() {
   done
 }
 
+choose_paged_option() {
+  local label=$1
+  local default_index=$2
+  local page_size=$3
+  shift 3
+  local options=("$@")
+  local page=0
+  local page_count=$(((${#options[@]} + page_size - 1) / page_size))
+  local start
+  local end
+  local index
+  local page_default
+
+  while true; do
+    start=$((page * page_size))
+    end=$((start + page_size))
+    ((end > ${#options[@]})) && end=${#options[@]}
+    page_default=$((start + 1))
+    if ((default_index > start && default_index <= end)); then
+      page_default=$default_index
+    fi
+
+    printf '\n%s（第 %d/%d 頁）\n' "$label" "$((page + 1))" "$page_count"
+    for ((index = start; index < end; index += 1)); do
+      printf '  %d) %s\n' "$((index + 1))" "${options[$index]}"
+    done
+    ((page + 1 < page_count)) && printf '  n) 下一頁\n'
+    ((page > 0)) && printf '  p) 上一頁\n'
+    printf '  q) 取消\n'
+    printf '請選擇 [%s]：' "$page_default"
+
+    if ! IFS= read -r ANSWER; then
+      cancel
+    fi
+    if [[ -z $ANSWER ]]; then
+      ANSWER=$page_default
+    fi
+    case "$ANSWER" in
+      [Qq] | [Qq][Uu][Ii][Tt] | [Ee][Xx][Ii][Tt])
+        cancel
+        ;;
+      n | next)
+        if ((page + 1 < page_count)); then
+          page=$((page + 1))
+        else
+          printf '已經是最後一頁。\n' >&2
+        fi
+        continue
+        ;;
+      p | prev | previous)
+        if ((page > 0)); then
+          page=$((page - 1))
+        else
+          printf '已經是第一頁。\n' >&2
+        fi
+        continue
+        ;;
+    esac
+    if [[ $ANSWER =~ ^[0-9]+$ ]] &&
+      ((10#$ANSWER >= 1 && 10#$ANSWER <= ${#options[@]})); then
+      ANSWER=$((10#$ANSWER - 1))
+      return
+    fi
+    printf '請輸入 1 到 %d、n、p 或 q。\n' "${#options[@]}" >&2
+  done
+}
+
 resolve_project_dir() {
   local candidate=$1
   local base_dir=$2
@@ -248,6 +315,206 @@ select_project() {
   RUN_PROJECT=${candidates[$selected_index]}
 }
 
+resolve_log_root_path() {
+  local candidate=$1
+
+  if [[ $candidate != /* ]]; then
+    candidate="$RUN_PROJECT/$candidate"
+  fi
+  RESOLVED_LOG_ROOT=$candidate
+}
+
+select_local_resume_checkpoint() {
+  local experiment_name=${EXPERIMENT_NAMES[$TASK_INDEX]}
+  local experiment_dir
+  local run_data
+  local checkpoint_data
+  local marker
+  local run_name
+  local run_dir
+  local run_regex
+  local checkpoint_count
+  local highest_checkpoint
+  local updated_time
+  local checkpoint_name
+  local checkpoint_regex
+  local checkpoint_iteration
+  local checkpoint_mtime
+  local selected_index
+  local -a run_names=()
+  local -a run_dirs=()
+  local -a run_regexes=()
+  local -a run_labels=()
+  local -a checkpoint_names=()
+  local -a checkpoint_regexes=()
+  local -a checkpoint_labels=()
+
+  resolve_log_root_path "$LOG_ROOT"
+  experiment_dir="$RESOLVED_LOG_ROOT/$experiment_name"
+  if [[ ! -d $experiment_dir ]]; then
+    printf '[WARN] 找不到本機實驗紀錄目錄：%s\n' "$experiment_dir" >&2
+    return 1
+  fi
+
+  printf '\n[INFO] 搜尋可接續的本機訓練：%s\n' "$experiment_dir"
+  if ! run_data="$(
+    cd -- "$RUN_PROJECT"
+    MJLAB_RESUME_EXPERIMENT_DIR="$experiment_dir" "${PROJECT_PYTHON[@]}" - <<'PY'
+import os
+import re
+from datetime import datetime
+from pathlib import Path
+
+experiment_dir = Path(os.environ["MJLAB_RESUME_EXPERIMENT_DIR"])
+checkpoint_re = re.compile(r"^model_(\d+)\.pt$")
+
+
+def checkpoint_iteration(path: Path) -> int:
+  match = checkpoint_re.fullmatch(path.name)
+  assert match is not None
+  return int(match.group(1))
+
+
+records = []
+for run_dir in experiment_dir.iterdir():
+  if not run_dir.is_dir() or run_dir.name == "wandb_checkpoints":
+    continue
+  checkpoints = [
+    path
+    for path in run_dir.iterdir()
+    if path.is_file() and checkpoint_re.fullmatch(path.name)
+  ]
+  if not checkpoints:
+    continue
+  highest = max(
+    checkpoints,
+    key=lambda path: (checkpoint_iteration(path), path.stat().st_mtime_ns),
+  )
+  updated_ns = max(path.stat().st_mtime_ns for path in checkpoints)
+  records.append((updated_ns, run_dir, checkpoints, highest))
+
+for updated_ns, run_dir, checkpoints, highest in sorted(
+  records, key=lambda record: (record[0], record[1].name), reverse=True
+):
+  updated = datetime.fromtimestamp(updated_ns / 1_000_000_000).strftime(
+    "%Y-%m-%d %H:%M:%S"
+  )
+  print(
+    "\t".join(
+      (
+        "__MJLAB_RESUME_RUN__",
+        run_dir.name,
+        str(run_dir),
+        rf"\A{re.escape(run_dir.name)}\Z",
+        str(len(checkpoints)),
+        highest.name,
+        updated,
+      )
+    )
+  )
+PY
+  )"; then
+    printf '[WARN] 無法讀取本機 run：%s\n' "$experiment_dir" >&2
+    return 1
+  fi
+
+  while IFS=$'\t' read -r marker run_name run_dir run_regex checkpoint_count \
+    highest_checkpoint updated_time; do
+    [[ $marker == __MJLAB_RESUME_RUN__ ]] || continue
+    run_names+=("$run_name")
+    run_dirs+=("$run_dir")
+    run_regexes+=("$run_regex")
+    run_labels+=(
+      "$run_name（${checkpoint_count} 個 checkpoint；最高 ${highest_checkpoint}；最後更新 ${updated_time}）"
+    )
+  done <<<"$run_data"
+
+  if ((${#run_names[@]} == 0)); then
+    printf '[WARN] %s 下找不到可接續的 model_<iteration>.pt。\n' \
+      "$experiment_dir" >&2
+    return 1
+  fi
+
+  choose_paged_option "選擇要接續的 run：" 1 15 "${run_labels[@]}"
+  selected_index=$ANSWER
+  SELECTED_RESUME_RUN_NAME=${run_names[$selected_index]}
+  SELECTED_RESUME_RUN_REGEX=${run_regexes[$selected_index]}
+  run_dir=${run_dirs[$selected_index]}
+
+  if ! checkpoint_data="$(
+    cd -- "$RUN_PROJECT"
+    MJLAB_RESUME_RUN_DIR="$run_dir" "${PROJECT_PYTHON[@]}" - <<'PY'
+import os
+import re
+from datetime import datetime
+from pathlib import Path
+
+run_dir = Path(os.environ["MJLAB_RESUME_RUN_DIR"])
+checkpoint_re = re.compile(r"^model_(\d+)\.pt$")
+
+
+def checkpoint_iteration(path: Path) -> int:
+  match = checkpoint_re.fullmatch(path.name)
+  assert match is not None
+  return int(match.group(1))
+
+
+checkpoints = [
+  path
+  for path in run_dir.iterdir()
+  if path.is_file() and checkpoint_re.fullmatch(path.name)
+]
+for path in sorted(
+  checkpoints,
+  key=lambda checkpoint: (
+    checkpoint_iteration(checkpoint),
+    checkpoint.stat().st_mtime_ns,
+  ),
+  reverse=True,
+):
+  mtime = datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+  print(
+    "\t".join(
+      (
+        "__MJLAB_RESUME_CHECKPOINT__",
+        path.name,
+        rf"\A{re.escape(path.name)}\Z",
+        str(checkpoint_iteration(path)),
+        mtime,
+      )
+    )
+  )
+PY
+  )"; then
+    printf '[WARN] 無法讀取本機 checkpoint：%s\n' "$run_dir" >&2
+    return 1
+  fi
+
+  while IFS=$'\t' read -r marker checkpoint_name checkpoint_regex \
+    checkpoint_iteration checkpoint_mtime; do
+    [[ $marker == __MJLAB_RESUME_CHECKPOINT__ ]] || continue
+    checkpoint_names+=("$checkpoint_name")
+    checkpoint_regexes+=("$checkpoint_regex")
+    checkpoint_labels+=(
+      "$checkpoint_name（iteration=${checkpoint_iteration}；修改時間 ${checkpoint_mtime}）"
+    )
+  done <<<"$checkpoint_data"
+
+  if ((${#checkpoint_names[@]} == 0)); then
+    printf '[WARN] %s 下找不到可接續的 model_<iteration>.pt。\n' "$run_dir" >&2
+    return 1
+  fi
+
+  choose_paged_option "選擇要接續的 checkpoint：" 1 20 \
+    "${checkpoint_labels[@]}"
+  selected_index=$ANSWER
+  SELECTED_RESUME_CHECKPOINT_NAME=${checkpoint_names[$selected_index]}
+  SELECTED_RESUME_CHECKPOINT_REGEX=${checkpoint_regexes[$selected_index]}
+
+  printf '\n已選擇接續：%s/%s\n' \
+    "$SELECTED_RESUME_RUN_NAME" "$SELECTED_RESUME_CHECKPOINT_NAME"
+}
+
 select_project
 [[ -f $RUN_PROJECT/pyproject.toml ]] ||
   die "目錄不是可辨識的 Python 專案：$RUN_PROJECT"
@@ -256,6 +523,9 @@ command -v uv >/dev/null 2>&1 || die "找不到 uv，請先安裝 uv。"
 UV_COMMAND=(uv run)
 if [[ -x $RUN_PROJECT/.venv/bin/python ]]; then
   UV_COMMAND+=(--no-sync)
+  PROJECT_PYTHON=("$RUN_PROJECT/.venv/bin/python")
+else
+  PROJECT_PYTHON=("${UV_COMMAND[@]}" python)
 fi
 
 printf '\n[INFO] 從 %s 讀取已註冊任務...\n' "$RUN_PROJECT"
@@ -455,27 +725,48 @@ fi
 RESUME_ARGS=()
 prompt_yes_no "接續既有訓練？" no
 if [[ $ANSWER == True ]]; then
-  choose_option "Checkpoint 來源：" 1 "最新符合的本機 checkpoint" "W&B run"
-  if [[ $ANSWER == 0 ]]; then
-    prompt_text "Run 目錄名稱或 regex" '.*'
-    LOAD_RUN=$ANSWER
-    prompt_text "Checkpoint 檔名或 regex" 'model_.*.pt'
-    LOAD_CHECKPOINT=$ANSWER
-    RESUME_ARGS=(
-      --agent.resume True
-      --agent.load-run "$LOAD_RUN"
-      --agent.load-checkpoint "$LOAD_CHECKPOINT"
-    )
-  else
-    prompt_text "W&B run path（entity/project/run-id）" ""
-    WANDB_RUN_PATH=$ANSWER
-    prompt_text "W&B checkpoint 名稱" "" true
-    WANDB_CHECKPOINT=$ANSWER
-    RESUME_ARGS=(--agent.resume True --wandb-run-path "$WANDB_RUN_PATH")
-    if [[ -n $WANDB_CHECKPOINT ]]; then
-      RESUME_ARGS+=(--wandb-checkpoint-name "$WANDB_CHECKPOINT")
-    fi
-  fi
+  while true; do
+    choose_option "Checkpoint 來源：" 1 \
+      "自動搜尋並選擇本機 run / checkpoint" \
+      "手動輸入本機 run / checkpoint regex" \
+      "W&B run"
+    case "$ANSWER" in
+      0)
+        if select_local_resume_checkpoint; then
+          RESUME_ARGS=(
+            --agent.resume True
+            --agent.load-run "$SELECTED_RESUME_RUN_REGEX"
+            --agent.load-checkpoint "$SELECTED_RESUME_CHECKPOINT_REGEX"
+          )
+          break
+        fi
+        printf '[INFO] 請改選手動 regex 或 W&B，或輸入 q 取消。\n' >&2
+        ;;
+      1)
+        prompt_text "Run 目錄名稱或 regex" '.*'
+        LOAD_RUN=$ANSWER
+        prompt_text "Checkpoint 檔名或 regex" 'model_.*.pt'
+        LOAD_CHECKPOINT=$ANSWER
+        RESUME_ARGS=(
+          --agent.resume True
+          --agent.load-run "$LOAD_RUN"
+          --agent.load-checkpoint "$LOAD_CHECKPOINT"
+        )
+        break
+        ;;
+      2)
+        prompt_text "W&B run path（entity/project/run-id）" ""
+        WANDB_RUN_PATH=$ANSWER
+        prompt_text "W&B checkpoint 名稱" "" true
+        WANDB_CHECKPOINT=$ANSWER
+        RESUME_ARGS=(--agent.resume True --wandb-run-path "$WANDB_RUN_PATH")
+        if [[ -n $WANDB_CHECKPOINT ]]; then
+          RESUME_ARGS+=(--wandb-checkpoint-name "$WANDB_CHECKPOINT")
+        fi
+        break
+        ;;
+    esac
+  done
 fi
 
 COMMAND=(

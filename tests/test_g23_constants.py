@@ -51,6 +51,13 @@ def test_g23_entity_contract(g23_entity: Entity, g23_model: mujoco.MjModel) -> N
     assert g23_model.site(site_name).id >= 0
 
 
+def test_g23_joint_dynamics_match_source_urdf(g23_model: mujoco.MjModel) -> None:
+  for joint_name in _JOINT_NAMES:
+    dof_idx = g23_model.joint(joint_name).dofadr[0]
+    assert g23_model.dof_damping[dof_idx] == pytest.approx(0.0)
+    assert g23_model.dof_armature[dof_idx] == pytest.approx(0.0)
+
+
 def test_g23_keyframe_joint_positions(
   g23_entity: Entity, g23_model: mujoco.MjModel
 ) -> None:

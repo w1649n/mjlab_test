@@ -5,6 +5,15 @@ Changelog
 Upcoming version (not yet released)
 -----------------------------------
 
+Added
+^^^^^
+
+- Added non-blocking terminal keyboard control for velocity tasks in ``play``.
+  Commands start in random mode; press ``M`` to switch between random and manual,
+  use ``W``/``S``, ``A``/``D``, and ``Q``/``E`` to adjust planar velocity and yaw,
+  press ``Space`` (or its ``X`` alias) to zero the command, and press ``R`` to
+  reset the robot.
+
 Changed
 ^^^^^^^
 
