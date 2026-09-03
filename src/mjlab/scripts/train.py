@@ -46,6 +46,11 @@ class TrainConfig:
     return TrainConfig(env=env_cfg, agent=agent_cfg)
 
 
+def _should_randomize_initial_episode_lengths(resume_path: Path | None) -> bool:
+  """Randomize initial episode lengths only for a fresh training run."""
+  return resume_path is None
+
+
 def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES", "")
   if cuda_visible == "":
@@ -172,8 +177,12 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
     runner.load(str(resume_path))
 
+  # fix terrain levels problem
+  # A resumed run must start with full-length episodes so the terrain curriculum
+  # does not mistake a deliberately shortened first episode for poor performance.
   runner.learn(
-    num_learning_iterations=cfg.agent.max_iterations, init_at_random_ep_len=True
+    num_learning_iterations=cfg.agent.max_iterations,
+    init_at_random_ep_len=_should_randomize_initial_episode_lengths(resume_path),
   )
 
   env.close()

@@ -4,6 +4,7 @@ import ast
 import tempfile
 from dataclasses import asdict
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import mujoco
@@ -29,6 +30,7 @@ from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.tasks.tracking.rl.runner import _OnnxMotionModel
 from mjlab.terrains import TerrainEntityCfg
 from mjlab.utils.os import dump_yaml
+from mjlab.utils.spaces import Box
 
 
 @pytest.fixture(scope="module")
@@ -100,6 +102,117 @@ def env(device):
   env.close()
 
 
+def test_vecenv_wrapper_clips_raw_actions_before_environment_step(env, device):
+  wrapped_env = RslRlVecEnvWrapper(env, clip_actions=5.0)
+  raw_actions = torch.tensor([[9.0], [-2.0]], device=device)
+
+  _, _, _, extras = wrapped_env.step(raw_actions)
+
+  expected = torch.tensor([[5.0], [-2.0]], device=device)
+  torch.testing.assert_close(env.action_manager.action, expected)
+  action_term = env.action_manager.get_term("joint_pos")
+  torch.testing.assert_close(action_term.raw_action, expected)
+  assert extras["log"]["Metrics/raw_action_step_abs_max"].item() == pytest.approx(9.0)
+  assert extras["log"]["Metrics/raw_action_clip_fraction"].item() == pytest.approx(0.5)
+  assert isinstance(wrapped_env.action_space, Box)
+  assert wrapped_env.action_space.low == -5.0
+  assert wrapped_env.action_space.high == 5.0
+
+
+@pytest.mark.parametrize("nonfinite", [float("nan"), float("inf"), float("-inf")])
+def test_vecenv_wrapper_rejects_nonfinite_actions_before_environment_step(
+  env, device, nonfinite
+):
+  wrapped_env = RslRlVecEnvWrapper(env, clip_actions=5.0)
+  action_before = env.action_manager.action.clone()
+  raw_actions = torch.tensor([[nonfinite], [0.0]], device=device)
+
+  with pytest.raises(FloatingPointError, match="non-finite raw action"):
+    wrapped_env.step(raw_actions)
+
+  torch.testing.assert_close(env.action_manager.action, action_before)
+
+
+@pytest.mark.parametrize("clip_actions", [0.0, -1.0, float("nan"), float("inf")])
+def test_vecenv_wrapper_rejects_invalid_action_clip(clip_actions):
+  with pytest.raises(ValueError, match="positive finite"):
+    RslRlVecEnvWrapper(MagicMock(), clip_actions=clip_actions)
+
+
+# 2026-09-02 stair-training update: simultaneous failure and timeout remains
+# terminal for PPO, while a timeout without failure is still bootstrapped.
+def test_vecenv_wrapper_excludes_failures_from_timeout_bootstrap(
+  env, device, monkeypatch
+):
+  wrapped_env = RslRlVecEnvWrapper(env)
+  observations = env.get_observations()
+  rewards = torch.zeros(2, device=device)
+  terminated = torch.tensor([False, True], device=device)
+  truncated = torch.tensor([True, True], device=device)
+  monkeypatch.setattr(
+    env,
+    "step",
+    lambda _actions: (observations, rewards, terminated, truncated, {}),
+  )
+
+  _, _, dones, extras = wrapped_env.step(torch.zeros(2, 1, device=device))
+
+  assert dones.tolist() == [1, 1]
+  assert extras["time_outs"].tolist() == [True, False]
+
+
+@pytest.fixture
+def curriculum_terrain(env, device):
+  """Temporarily turn the plane fixture into an isolated curriculum terrain."""
+  terrain = env.scene.terrain
+  assert terrain is not None
+
+  had_levels = hasattr(terrain, "terrain_levels")
+  had_types = hasattr(terrain, "terrain_types")
+  old_levels = getattr(terrain, "terrain_levels", None)
+  old_types = getattr(terrain, "terrain_types", None)
+  old_terrain_origins = terrain.terrain_origins
+  old_env_origins = terrain.env_origins
+  old_generator_cfg = terrain.cfg.terrain_generator
+  old_common_step_counter = env.common_step_counter
+
+  terrain_origins = torch.tensor(
+    [
+      [[0.0, 0.0, 0.0], [0.0, 20.0, 1.0]],
+      [[10.0, 0.0, 2.0], [10.0, 20.0, 3.0]],
+      [[20.0, 0.0, 4.0], [20.0, 20.0, 5.0]],
+    ],
+    device=device,
+  )
+  terrain.cfg.terrain_generator = SimpleNamespace(
+    sub_terrains={"flat": object(), "stairs": object()}
+  )
+  terrain.terrain_origins = terrain_origins
+  terrain.terrain_levels = torch.tensor([0, 1], device=device, dtype=torch.long)
+  terrain.terrain_types = torch.tensor([0, 1], device=device, dtype=torch.long)
+  terrain.env_origins = terrain_origins[
+    terrain.terrain_levels, terrain.terrain_types
+  ].clone()
+
+  try:
+    yield terrain, terrain_origins
+  finally:
+    terrain.cfg.terrain_generator = old_generator_cfg
+    terrain.terrain_origins = old_terrain_origins
+    terrain.env_origins = old_env_origins
+    if had_levels:
+      terrain.terrain_levels = old_levels
+    else:
+      del terrain.terrain_levels
+    if had_types:
+      terrain.terrain_types = old_types
+    else:
+      del terrain.terrain_types
+    # Restore both the Python origins and live MuJoCo state for the module fixture.
+    env.common_step_counter = old_common_step_counter
+    env.reset()
+
+
 def test_runner_persists_common_step_counter(env, device, monkeypatch):
   """MjlabOnPolicyRunner should save and restore common_step_counter."""
   wrapped_env = RslRlVecEnvWrapper(env)
@@ -121,6 +234,35 @@ def test_runner_persists_common_step_counter(env, device, monkeypatch):
     runner.load(checkpoint_path)
 
     assert wrapped_env.unwrapped.common_step_counter == 12345
+
+
+# 2026-09-02 stair-training update: cover manager state through a full save/load.
+def test_runner_persists_curriculum_manager_state(env, device, monkeypatch):
+  wrapped_env = RslRlVecEnvWrapper(env)
+  curriculum_manager = wrapped_env.unwrapped.curriculum_manager
+  curriculum_state = {"command_velocity": {"stage": 2, "score": 0.75}}
+  state_dict = MagicMock(return_value=curriculum_state)
+  load_state_dict = MagicMock()
+  monkeypatch.setattr(curriculum_manager, "state_dict", state_dict)
+  monkeypatch.setattr(curriculum_manager, "load_state_dict", load_state_dict)
+
+  agent_cfg = RslRlOnPolicyRunnerCfg(
+    num_steps_per_env=4, max_iterations=10, save_interval=5
+  )
+  with tempfile.TemporaryDirectory() as tmpdir:
+    runner = MjlabOnPolicyRunner(
+      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
+    )
+    monkeypatch.setattr(runner.logger, "save_model", lambda *args, **kwargs: None)
+    checkpoint_path = str(Path(tmpdir) / "curriculum_checkpoint.pt")
+
+    runner.save(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    assert checkpoint["infos"]["env_state"]["curriculum"] == curriculum_state
+    state_dict.assert_called_once_with()
+
+    runner.load(checkpoint_path)
+    load_state_dict.assert_called_once_with(curriculum_state)
 
 
 def test_runner_handles_old_checkpoints_without_env_state(env, device):
@@ -150,6 +292,226 @@ def test_runner_handles_old_checkpoints_without_env_state(env, device):
     runner.load(checkpoint_path)
 
     assert wrapped_env.unwrapped.common_step_counter == 999
+
+
+# 2026-09-02 stair-training update: prior env_state payloads lack curriculum.
+def test_runner_handles_old_env_state_without_curriculum(env, device, monkeypatch):
+  wrapped_env = RslRlVecEnvWrapper(env)
+  curriculum_manager = wrapped_env.unwrapped.curriculum_manager
+  load_state_dict = MagicMock()
+  monkeypatch.setattr(curriculum_manager, "load_state_dict", load_state_dict)
+  agent_cfg = RslRlOnPolicyRunnerCfg(
+    num_steps_per_env=4, max_iterations=10, save_interval=5
+  )
+
+  with tempfile.TemporaryDirectory() as tmpdir:
+    runner = MjlabOnPolicyRunner(
+      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
+    )
+    checkpoint = runner.alg.save()
+    checkpoint.update(
+      {
+        "iter": 100,
+        "infos": {"env_state": {"common_step_counter": 2468}},
+      }
+    )
+    checkpoint_path = str(Path(tmpdir) / "old_env_state_checkpoint.pt")
+    torch.save(checkpoint, checkpoint_path)
+
+    wrapped_env.unwrapped.common_step_counter = 0
+    runner.load(checkpoint_path)
+
+    assert wrapped_env.unwrapped.common_step_counter == 2468
+    load_state_dict.assert_not_called()
+
+
+def test_runner_persists_terrain_state_and_aligns_entities(
+  env, device, monkeypatch, curriculum_terrain
+):
+  """Full resume restores terrain buckets without leaving robots at old origins."""
+  terrain, terrain_origins = curriculum_terrain
+  terrain.terrain_levels.copy_(torch.tensor([2, 1], device=device))
+  terrain.terrain_types.copy_(torch.tensor([1, 0], device=device))
+  terrain.env_origins.copy_(
+    terrain_origins[terrain.terrain_levels, terrain.terrain_types]
+  )
+  wrapped_env = RslRlVecEnvWrapper(env)
+  agent_cfg = RslRlOnPolicyRunnerCfg(
+    num_steps_per_env=4, max_iterations=10, save_interval=5
+  )
+
+  with tempfile.TemporaryDirectory() as tmpdir:
+    runner = MjlabOnPolicyRunner(
+      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
+    )
+    monkeypatch.setattr(runner.logger, "save_model", lambda *args, **kwargs: None)
+
+    wrapped_env.unwrapped.common_step_counter = 12345
+    checkpoint_path = str(Path(tmpdir) / "terrain_checkpoint.pt")
+    runner.save(checkpoint_path)
+
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    saved_terrain = checkpoint["infos"]["env_state"]["terrain"]
+    assert saved_terrain["levels"].device.type == "cpu"
+    assert saved_terrain["types"].device.type == "cpu"
+    assert saved_terrain["grid_shape"] == (3, 2)
+    assert saved_terrain["terrain_names"] == ("flat", "stairs")
+
+    terrain.terrain_levels.copy_(torch.tensor([0, 0], device=device))
+    terrain.terrain_types.copy_(torch.tensor([0, 1], device=device))
+    terrain.env_origins.copy_(
+      terrain_origins[terrain.terrain_levels, terrain.terrain_types]
+    )
+    wrapped_env.reset()
+    robot = wrapped_env.unwrapped.scene["robot"]
+    relative_pose_before = (
+      robot.data.root_link_pose_w[:, :3] - terrain.env_origins
+    ).clone()
+
+    wrapped_env.unwrapped.common_step_counter = 0
+    runner.load(checkpoint_path)
+
+    assert wrapped_env.unwrapped.common_step_counter == 12345
+    assert terrain.terrain_levels.tolist() == [2, 1]
+    assert terrain.terrain_types.tolist() == [1, 0]
+    torch.testing.assert_close(
+      terrain.env_origins,
+      terrain_origins[terrain.terrain_levels, terrain.terrain_types],
+    )
+    torch.testing.assert_close(
+      robot.data.root_link_pose_w[:, :3] - terrain.env_origins,
+      relative_pose_before,
+    )
+
+
+def test_runner_rejects_invalid_terrain_state_atomically(
+  env, device, curriculum_terrain
+):
+  """Invalid saved indices must not partially mutate terrain or entity placement."""
+  terrain, _ = curriculum_terrain
+  wrapped_env = RslRlVecEnvWrapper(env)
+  agent_cfg = RslRlOnPolicyRunnerCfg(
+    num_steps_per_env=4, max_iterations=10, save_interval=5
+  )
+
+  with tempfile.TemporaryDirectory() as tmpdir:
+    runner = MjlabOnPolicyRunner(
+      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
+    )
+    levels_before = terrain.terrain_levels.clone()
+    types_before = terrain.terrain_types.clone()
+    origins_before = terrain.env_origins.clone()
+    robot_pose_before = env.scene["robot"].data.root_link_pose_w.clone()
+
+    invalid_state = {
+      "levels": torch.tensor([1, 0]),
+      "types": torch.tensor([0, 2]),
+      "grid_shape": (3, 2),
+      "terrain_names": ("flat", "stairs"),
+    }
+    with pytest.warns(RuntimeWarning, match="outside the current terrain grid"):
+      runner._restore_terrain_state(invalid_state)
+
+    assert torch.equal(terrain.terrain_levels, levels_before)
+    assert torch.equal(terrain.terrain_types, types_before)
+    assert torch.equal(terrain.env_origins, origins_before)
+    assert torch.equal(env.scene["robot"].data.root_link_pose_w, robot_pose_before)
+
+
+@pytest.mark.parametrize("mismatch", ["grid_shape", "terrain_names", "num_envs"])
+def test_runner_rejects_mismatched_terrain_configuration_atomically(
+  env, device, curriculum_terrain, mismatch
+):
+  """A checkpoint from an incompatible terrain layout must be ignored as a unit."""
+  terrain, _ = curriculum_terrain
+  wrapped_env = RslRlVecEnvWrapper(env)
+  agent_cfg = RslRlOnPolicyRunnerCfg(
+    num_steps_per_env=4, max_iterations=10, save_interval=5
+  )
+
+  with tempfile.TemporaryDirectory() as tmpdir:
+    runner = MjlabOnPolicyRunner(
+      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
+    )
+    levels_before = terrain.terrain_levels.clone()
+    types_before = terrain.terrain_types.clone()
+    origins_before = terrain.env_origins.clone()
+
+    terrain_state = {
+      "levels": torch.tensor([1, 0]),
+      "types": torch.tensor([1, 0]),
+      "grid_shape": (3, 2),
+      "terrain_names": ("flat", "stairs"),
+    }
+    if mismatch == "grid_shape":
+      terrain_state["grid_shape"] = (2, 2)
+      warning = "terrain grid"
+    elif mismatch == "terrain_names":
+      terrain_state["terrain_names"] = ("stairs", "flat")
+      warning = "terrain types"
+    else:
+      terrain_state["levels"] = torch.tensor([1])
+      warning = "environment count"
+
+    with pytest.warns(RuntimeWarning, match=warning):
+      runner._restore_terrain_state(terrain_state)
+
+    assert torch.equal(terrain.terrain_levels, levels_before)
+    assert torch.equal(terrain.terrain_types, types_before)
+    assert torch.equal(terrain.env_origins, origins_before)
+
+
+def test_runner_handles_environment_without_terrain(env, device, monkeypatch):
+  """Saving is valid and saved curriculum state is ignored when terrain is absent."""
+  wrapped_env = RslRlVecEnvWrapper(env)
+  agent_cfg = RslRlOnPolicyRunnerCfg(
+    num_steps_per_env=4, max_iterations=10, save_interval=5
+  )
+
+  with tempfile.TemporaryDirectory() as tmpdir:
+    runner = MjlabOnPolicyRunner(
+      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
+    )
+    monkeypatch.setattr(runner.logger, "save_model", lambda *args, **kwargs: None)
+    monkeypatch.setattr(wrapped_env.unwrapped.scene, "_terrain", None)
+
+    checkpoint_path = str(Path(tmpdir) / "no_terrain_checkpoint.pt")
+    runner.save(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+
+    assert "terrain" not in checkpoint["infos"]["env_state"]
+    with pytest.warns(RuntimeWarning, match="has no curriculum terrain"):
+      runner._restore_terrain_state(
+        {
+          "levels": torch.tensor([0, 0]),
+          "types": torch.tensor([0, 0]),
+          "grid_shape": (1, 1),
+        }
+      )
+
+
+def test_runner_partial_load_does_not_restore_environment(env, device, monkeypatch):
+  """Actor-only loads used by play/hot-swap must not alter the live environment."""
+  wrapped_env = RslRlVecEnvWrapper(env)
+  agent_cfg = RslRlOnPolicyRunnerCfg(
+    num_steps_per_env=4, max_iterations=10, save_interval=5
+  )
+
+  with tempfile.TemporaryDirectory() as tmpdir:
+    runner = MjlabOnPolicyRunner(
+      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
+    )
+    monkeypatch.setattr(runner.logger, "save_model", lambda *args, **kwargs: None)
+    wrapped_env.unwrapped.common_step_counter = 12345
+    checkpoint_path = str(Path(tmpdir) / "partial_checkpoint.pt")
+    runner.save(checkpoint_path)
+
+    wrapped_env.unwrapped.common_step_counter = 77
+    with patch.object(runner, "_restore_env_state") as restore_env_state:
+      runner.load(checkpoint_path, load_cfg={"actor": True})
+
+    restore_env_state.assert_not_called()
+    assert wrapped_env.unwrapped.common_step_counter == 77
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")

@@ -1,9 +1,4 @@
-"""Tests for the velocity command's initial-velocity injection.
-
-The init_velocity_prob path runs inside the reset pipeline, after reset
-events wrote the new pose to qpos but before sim.forward(), so it must not
-read (or write back) derived kinematics.
-"""
+"""Tests for velocity command sampling, overrides, and reset behavior."""
 
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
@@ -31,6 +26,11 @@ def _make_velocity_command(
   resampling_time_range: tuple[float, float] = (100.0, 100.0),
   ranges: UniformVelocityCommandCfg.Ranges | None = None,
   heading_command: bool = False,
+  rel_standing_envs: float = 0.0,
+  rel_heading_envs: float = 0.0,
+  rel_world_envs: float = 0.0,
+  rel_forward_envs: float = 0.0,
+  rel_backward_envs: float = 0.0,
 ):
   scene, sim = make_scene_and_sim(
     device,
@@ -47,10 +47,11 @@ def _make_velocity_command(
   cfg = UniformVelocityCommandCfg(
     entity_name="robot",
     resampling_time_range=resampling_time_range,
-    rel_standing_envs=0.0,
-    rel_heading_envs=0.0,
-    rel_world_envs=0.0,
-    rel_forward_envs=0.0,
+    rel_standing_envs=rel_standing_envs,
+    rel_heading_envs=rel_heading_envs,
+    rel_world_envs=rel_world_envs,
+    rel_forward_envs=rel_forward_envs,
+    rel_backward_envs=rel_backward_envs,
     heading_command=heading_command,
     ranges=ranges
     or UniformVelocityCommandCfg.Ranges(
@@ -163,6 +164,192 @@ def test_mid_episode_resample_does_not_write_velocity(device):
   )
 
 
+@pytest.mark.parametrize(
+  ("rel_forward_envs", "rel_backward_envs", "expected_x"),
+  [(1.0, 0.0, 0.65), (0.0, 1.0, -0.65)],
+)
+def test_directional_bucket_stays_straight_in_body_frame(
+  device, rel_forward_envs, rel_backward_envs, expected_x
+):
+  term = _make_velocity_command(
+    device,
+    num_envs=8,
+    heading_command=True,
+    rel_heading_envs=1.0,
+    rel_world_envs=1.0,
+    rel_forward_envs=rel_forward_envs,
+    rel_backward_envs=rel_backward_envs,
+    ranges=UniformVelocityCommandCfg.Ranges(
+      lin_vel_x=(0.65, 0.65),
+      lin_vel_y=(0.2, 0.2),
+      ang_vel_z=(0.4, 0.4),
+      heading=(1.0, 1.0),
+    ),
+  )
+  term.compute(dt=0.0)
+
+  expected = torch.tensor((expected_x, 0.0, 0.0), device=device).expand(8, -1)
+  assert torch.allclose(term.command, expected)
+  assert torch.allclose(term.vel_command_w, expected)
+  assert term.is_forward_env.all().item() == bool(rel_forward_envs)
+  assert term.is_backward_env.all().item() == bool(rel_backward_envs)
+  assert not term.is_heading_env.any()
+  assert not term.is_world_env.any()
+
+
+def test_forward_and_backward_buckets_are_mutually_exclusive(device):
+  torch.manual_seed(0)
+  term = _make_velocity_command(
+    device,
+    num_envs=64,
+    rel_forward_envs=0.5,
+    rel_backward_envs=0.5,
+  )
+
+  assert (term.is_forward_env ^ term.is_backward_env).all()
+  assert term.is_forward_env.any()
+  assert term.is_backward_env.any()
+  assert (term.command[term.is_forward_env, 0] >= 0.3).all()
+  assert (term.command[term.is_backward_env, 0] <= -0.3).all()
+  assert torch.equal(term.command[:, 1:], torch.zeros_like(term.command[:, 1:]))
+
+
+def test_curriculum_restore_resamples_commands_from_restored_ranges(device):
+  term = _make_velocity_command(
+    device,
+    num_envs=4,
+    rel_forward_envs=1.0,
+    ranges=UniformVelocityCommandCfg.Ranges(
+      lin_vel_x=(0.4, 0.4),
+      lin_vel_y=(0.0, 0.0),
+      ang_vel_z=(0.0, 0.0),
+    ),
+  )
+  term._forward_tracking_count.fill_(5)
+  term.cfg.ranges.lin_vel_x = (0.9, 0.9)
+  term.cfg.rel_forward_envs = 0.0
+  term.cfg.rel_backward_envs = 1.0
+
+  term.resample_after_curriculum_restore()
+
+  assert torch.allclose(term.command[:, 0], torch.full_like(term.command[:, 0], -0.9))
+  assert term.is_backward_env.all()
+  assert not term.is_forward_env.any()
+  assert not term._forward_tracking_count.any()
+
+
+def test_standing_commands_override_directional_buckets(device):
+  term = _make_velocity_command(
+    device,
+    num_envs=8,
+    rel_standing_envs=1.0,
+    rel_backward_envs=1.0,
+  )
+  term.compute(dt=0.0)
+
+  assert term.is_standing_env.all()
+  assert not term.is_forward_env.any()
+  assert not term.is_backward_env.any()
+  assert torch.equal(term.command, torch.zeros_like(term.command))
+
+
+def test_directional_bucket_partial_resample_is_scoped(device):
+  term = _make_velocity_command(device, num_envs=3, rel_backward_envs=1.0)
+  untouched_command = term.command[[0, 2]].clone()
+  untouched_world_command = term.vel_command_w[[0, 2]].clone()
+
+  term.cfg.rel_backward_envs = 0.0
+  term.cfg.rel_forward_envs = 1.0
+  term.reset(torch.tensor([1], device=device))
+
+  assert term.is_backward_env.tolist() == [True, False, True]
+  assert term.is_forward_env.tolist() == [False, True, False]
+  assert torch.equal(term.command[[0, 2]], untouched_command)
+  assert torch.equal(term.vel_command_w[[0, 2]], untouched_world_command)
+  assert term.command[1, 0] >= 0.3
+  assert torch.equal(term.command[1, 1:], torch.zeros_like(term.command[1, 1:]))
+
+
+# 2026-09-02 stair-training update: the performance gate consumes these
+# statistics immediately before the command manager resets completed envs.
+def test_directional_tracking_stats_accumulate_and_partial_reset_is_scoped(device):
+  term = _make_velocity_command(device, num_envs=3)
+  term.vel_command_b[:] = torch.tensor(
+    [[0.5, 0.0, 0.0], [-0.5, 0.0, 0.0], [0.0, 0.0, 0.0]], device=device
+  )
+  term.is_forward_env[:] = torch.tensor([True, False, False], device=device)
+  term.is_backward_env[:] = torch.tensor([False, True, False], device=device)
+  term.robot.write_root_link_velocity_to_sim(
+    torch.zeros(3, 6, device=device), env_ids=torch.arange(3, device=device)
+  )
+  term._env.sim.forward()
+
+  term.compute(torch.tensor([0.02, 0.02, 0.0], device=device))
+  stats = term.get_directional_tracking_stats(torch.arange(3, device=device))
+  expected_score = torch.exp(torch.tensor(-1.0, device=device))
+  assert stats["forward_tracking_count"].tolist() == [1, 0, 0]
+  assert stats["backward_tracking_count"].tolist() == [0, 1, 0]
+  assert stats["forward_tracking_sum"][0].item() == pytest.approx(expected_score.item())
+  assert stats["backward_tracking_sum"][1].item() == pytest.approx(
+    expected_score.item()
+  )
+
+  # A zero per-env dt contributes no sample, and resetting env 1 must not
+  # erase env 0's still-running episode.
+  term.compute(torch.tensor([0.02, 0.0, 0.02], device=device))
+  term.reset(torch.tensor([1], device=device))
+  stats = term.get_directional_tracking_stats(torch.arange(3, device=device))
+  assert stats["forward_tracking_count"].tolist() == [2, 0, 0]
+  assert stats["backward_tracking_count"].tolist() == [0, 0, 0]
+  assert stats["forward_tracking_sum"][0].item() == pytest.approx(
+    2.0 * expected_score.item()
+  )
+
+
+def test_backward_bucket_is_disabled_by_default():
+  cfg = UniformVelocityCommandCfg(
+    entity_name="robot",
+    resampling_time_range=(1.0, 1.0),
+    rel_forward_envs=1.0,
+    ranges=UniformVelocityCommandCfg.Ranges(
+      lin_vel_x=(-1.0, 1.0),
+      lin_vel_y=(-0.5, 0.5),
+      ang_vel_z=(-0.5, 0.5),
+    ),
+  )
+
+  assert cfg.rel_backward_envs == 0.0
+
+
+@pytest.mark.parametrize(
+  ("rel_forward_envs", "rel_backward_envs"),
+  [
+    (-0.1, 0.0),
+    (1.1, 0.0),
+    (0.0, -0.1),
+    (0.0, 1.1),
+    (float("nan"), 0.0),
+    (0.0, float("nan")),
+    (0.6, 0.5),
+  ],
+)
+def test_directional_bucket_fractions_are_validated(
+  rel_forward_envs, rel_backward_envs
+):
+  with pytest.raises(ValueError):
+    UniformVelocityCommandCfg(
+      entity_name="robot",
+      resampling_time_range=(1.0, 1.0),
+      rel_forward_envs=rel_forward_envs,
+      rel_backward_envs=rel_backward_envs,
+      ranges=UniformVelocityCommandCfg.Ranges(
+        lin_vel_x=(-1.0, 1.0),
+        lin_vel_y=(-0.5, 0.5),
+        ang_vel_z=(-0.5, 0.5),
+      ),
+    )
+
+
 def test_manual_command_applies_immediately_and_clamps(device):
   term = _make_velocity_command(device, num_envs=1)
   result = term.set_manual_command(0, (2.0, -1.0, 0.9))
@@ -237,6 +424,7 @@ def test_manual_command_overrides_standing_heading_and_world_updates(device):
   term.is_standing_env[0] = True
   term.is_heading_env[0] = True
   term.is_world_env[0] = True
+  term.is_backward_env[0] = True
   term.heading_target[0] = 0.9
   term.vel_command_w[0] = torch.tensor((0.6, 0.2, 0.0), device=device)
 
@@ -244,6 +432,7 @@ def test_manual_command_overrides_standing_heading_and_world_updates(device):
   term.set_manual_command(0, command)
 
   assert term.command[0].tolist() == pytest.approx(command)
+  assert not term.is_backward_env[0]
 
   # Even if another command subtype marks the env again later, the persistent
   # manual override must still be applied last on every compute.

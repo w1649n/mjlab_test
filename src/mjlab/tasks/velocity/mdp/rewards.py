@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -62,6 +63,62 @@ def track_angular_velocity(
   xy_error = torch.sum(torch.square(actual[:, :2]), dim=1)
   ang_vel_error = z_error + xy_error
   return torch.exp(-ang_vel_error / std**2)
+
+
+# 2026-09-02 stair-training update: decouple task tracking from base-motion costs.
+def track_linear_velocity_xy(
+  env: ManagerBasedRlEnv,
+  std: float,
+  command_name: str,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Reward commanded base linear-velocity tracking on the XY axes only."""
+  asset: Entity = env.scene[asset_cfg.name]
+  command = env.command_manager.get_command(command_name)
+  assert command is not None, f"Command '{command_name}' not found."
+  error = torch.sum(
+    torch.square(command[:, :2] - asset.data.root_link_lin_vel_b[:, :2]), dim=1
+  )
+  return torch.exp(-error / std**2)
+
+
+def track_angular_velocity_yaw(
+  env: ManagerBasedRlEnv,
+  std: float,
+  command_name: str,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Reward commanded base angular-velocity tracking on the yaw axis only."""
+  asset: Entity = env.scene[asset_cfg.name]
+  command = env.command_manager.get_command(command_name)
+  assert command is not None, f"Command '{command_name}' not found."
+  error = torch.square(command[:, 2] - asset.data.root_link_ang_vel_b[:, 2])
+  return torch.exp(-error / std**2)
+
+
+def vertical_velocity_l2(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Penalize squared base vertical velocity in the body frame."""
+  asset: Entity = env.scene[asset_cfg.name]
+  return torch.square(asset.data.root_link_lin_vel_b[:, 2])
+
+
+def base_height_l2(
+  env: ManagerBasedRlEnv,
+  target_height: float,
+  height_sensor_name: str,
+) -> torch.Tensor:
+  """Penalize squared base-clearance error relative to the local terrain."""
+  height_sensor = env.scene[height_sensor_name]
+  assert isinstance(height_sensor, TerrainHeightSensor), (
+    f"base_height_l2 requires a TerrainHeightSensor, got {type(height_sensor).__name__}"
+  )
+  heights = height_sensor.data.heights
+  if heights.ndim > 1:
+    heights = torch.mean(heights, dim=tuple(range(1, heights.ndim)))
+  return torch.square(heights - target_height)
 
 
 class upright:
@@ -238,6 +295,165 @@ def feet_air_time(
   return reward
 
 
+# 2026-09-02 anti-tripod update: continuously penalize a foot that stays airborne.
+def feet_excessive_air_time(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  max_air_time: float,
+  max_excess_time: float,
+) -> torch.Tensor:
+  """Penalize each foot's air time beyond a safe duration.
+
+  The per-foot cost is ``clamp(current_air_time - max_air_time, 0,
+  max_excess_time) ** 2``.  It is continuous at ``max_air_time`` and bounded,
+  so a permanently lifted foot remains costly without producing unbounded PPO
+  advantages.  ``current_air_time`` is already tracked per primary contact,
+  independent of the sensor's number of contact slots.
+  """
+  if not math.isfinite(max_air_time) or max_air_time < 0.0:
+    raise ValueError(
+      f"max_air_time must be finite and non-negative, got {max_air_time}"
+    )
+  if not math.isfinite(max_excess_time) or max_excess_time <= 0.0:
+    raise ValueError(
+      f"max_excess_time must be finite and positive, got {max_excess_time}"
+    )
+
+  sensor: ContactSensor = env.scene[sensor_name]
+  current_air_time = sensor.data.current_air_time
+  if current_air_time is None:
+    raise RuntimeError(
+      f"Contact sensor '{sensor_name}' must set track_air_time=True for "
+      "feet_excessive_air_time"
+    )
+  if current_air_time.ndim != 2:
+    raise ValueError(
+      f"Contact sensor '{sensor_name}' current_air_time must have shape [B, P], "
+      f"got {tuple(current_air_time.shape)}"
+    )
+
+  primary_names = tuple(sensor.primary_names)
+  if not primary_names:
+    raise ValueError(f"Contact sensor '{sensor_name}' has no primary contacts")
+  if current_air_time.shape[1] != len(primary_names):
+    raise ValueError(
+      f"Contact sensor '{sensor_name}' current_air_time has "
+      f"{current_air_time.shape[1]} columns, but {len(primary_names)} primaries"
+    )
+
+  excess = torch.clamp(current_air_time - max_air_time, min=0.0, max=max_excess_time)
+  cost = torch.sum(torch.square(excess), dim=1)
+
+  log = env.extras.setdefault("log", {})
+  log["Metrics/anti_tripod/air_time_max"] = torch.amax(current_air_time)
+  log["Metrics/anti_tripod/air_time_excess_max"] = torch.amax(excess)
+  for foot_idx, foot_name in enumerate(primary_names):
+    safe_name = _contact_metric_name(foot_name, foot_idx)
+    log[f"Metrics/anti_tripod/air_time_mean/{safe_name}"] = torch.mean(
+      current_air_time[:, foot_idx]
+    )
+  return cost
+
+
+# 2026-09-02 anti-tripod update: require all feet to support a stationary stance.
+def feet_contact_count_standing(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  command_name: str,
+  required_contacts: int,
+  command_threshold: float = 0.05,
+) -> torch.Tensor:
+  """Penalize missing foot contacts while the commanded motion is stationary.
+
+  ``found`` is a per-contact-slot tensor.  Sensors with multiple slots per
+  primary are reduced using an any-slot rule before contacts are counted, so a
+  foot can contribute at most one contact regardless of ``num_slots``.
+  """
+  if isinstance(required_contacts, bool) or not isinstance(required_contacts, int):
+    raise TypeError(
+      f"required_contacts must be an integer, got {type(required_contacts).__name__}"
+    )
+  if required_contacts <= 0:
+    raise ValueError(f"required_contacts must be positive, got {required_contacts}")
+  if not math.isfinite(command_threshold) or command_threshold < 0.0:
+    raise ValueError(
+      f"command_threshold must be finite and non-negative, got {command_threshold}"
+    )
+
+  sensor: ContactSensor = env.scene[sensor_name]
+  in_contact, primary_names = _contact_per_primary(sensor, sensor_name)
+  if required_contacts > len(primary_names):
+    raise ValueError(
+      f"required_contacts ({required_contacts}) exceeds the {len(primary_names)} "
+      f"primaries on contact sensor '{sensor_name}'"
+    )
+
+  command = env.command_manager.get_command(command_name)
+  if command is None:
+    raise RuntimeError(f"Command '{command_name}' not found")
+  if (
+    command.ndim != 2 or command.shape[0] != in_contact.shape[0] or command.shape[1] < 3
+  ):
+    raise ValueError(
+      f"Command '{command_name}' must have shape [B, >=3] matching the contact "
+      f"batch, got {tuple(command.shape)} for B={in_contact.shape[0]}"
+    )
+
+  command_magnitude = torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2])
+  standing = command_magnitude <= command_threshold
+  contact_count = torch.sum(in_contact, dim=1)
+  missing = torch.clamp(required_contacts - contact_count, min=0).to(command.dtype)
+  cost = missing * standing.to(command.dtype)
+
+  log = env.extras.setdefault("log", {})
+  log["Metrics/anti_tripod/standing_fraction"] = torch.mean(standing.float())
+  log["Metrics/anti_tripod/standing_missing_contacts_max"] = torch.amax(cost)
+  standing_count = torch.clamp(torch.sum(standing), min=1)
+  for foot_idx, foot_name in enumerate(primary_names):
+    safe_name = _contact_metric_name(foot_name, foot_idx)
+    contact_rate = torch.sum(in_contact[:, foot_idx] & standing) / standing_count
+    log[f"Metrics/anti_tripod/standing_contact_rate/{safe_name}"] = contact_rate
+  return cost
+
+
+def _contact_per_primary(
+  sensor: ContactSensor, sensor_name: str
+) -> tuple[torch.Tensor, tuple[str, ...]]:
+  """Return [B, P] contact flags from a possibly multi-slot contact sensor."""
+  found = sensor.data.found
+  if found is None:
+    raise RuntimeError(
+      f"Contact sensor '{sensor_name}' must include the 'found' field for "
+      "feet_contact_count_standing"
+    )
+  if found.ndim != 2:
+    raise ValueError(
+      f"Contact sensor '{sensor_name}' found must have shape [B, P * S], "
+      f"got {tuple(found.shape)}"
+    )
+
+  primary_names = tuple(sensor.primary_names)
+  num_primary = len(primary_names)
+  if num_primary == 0:
+    raise ValueError(f"Contact sensor '{sensor_name}' has no primary contacts")
+  num_slots, remainder = divmod(found.shape[1], num_primary)
+  if num_slots == 0 or remainder:
+    raise ValueError(
+      f"Contact sensor '{sensor_name}' found has {found.shape[1]} columns, which "
+      f"cannot be grouped across {num_primary} primaries"
+    )
+  in_contact = (found.reshape(found.shape[0], num_primary, num_slots) > 0).any(dim=-1)
+  return in_contact, primary_names
+
+
+def _contact_metric_name(primary_name: str, primary_idx: int) -> str:
+  """Build a stable logger key without introducing nested path separators."""
+  safe_name = "".join(
+    char if char.isalnum() or char in "-_" else "_" for char in primary_name
+  )
+  return f"{primary_idx}_{safe_name or 'foot'}"
+
+
 def feet_clearance(
   env: ManagerBasedRlEnv,
   target_height: float,
@@ -321,6 +537,11 @@ class feet_swing_height:
       self.peak_heights,
     )
     return cost
+
+  # 2026-09-02 anti-tripod update: do not carry swing peaks across episodes.
+  def reset(self, env_ids: torch.Tensor) -> None:
+    """Clear peak-height history only for environments being reset."""
+    self.peak_heights[env_ids] = 0.0
 
 
 def feet_slip(

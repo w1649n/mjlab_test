@@ -20,6 +20,9 @@ class VelocityOnPolicyRunner(MjlabOnPolicyRunner):
       is_wandb = isinstance(self.logger.writer, WandbLogWriter)
       run_name: str = wandb.run.name if is_wandb and wandb.run else "local"  # type: ignore[assignment]
       metadata = get_base_metadata(self.env.unwrapped, run_name)
+      metadata["raw_action_clip"] = (
+        self.env.clip_actions if self.env.clip_actions is not None else "None"
+      )
       attach_metadata_to_onnx(str(onnx_path), metadata)
       if is_wandb and self.cfg["upload_model"]:
         wandb.save(str(onnx_path), base_path=str(policy_dir))

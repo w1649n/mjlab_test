@@ -805,7 +805,7 @@ if [[ $DRY_RUN == true ]]; then
   exit 0
 fi
 
-prompt_yes_no "開始訓練？" no
+prompt_yes_no "開始訓練？" yes
 [[ $ANSWER == True ]] || cancel
 
 cd -- "$RUN_PROJECT"

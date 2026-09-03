@@ -42,6 +42,10 @@ def syncai_g23_ppo_runner_cfg(
       max_grad_norm=1.0,
     ),
     experiment_name=experiment_name,
+    # Keep raw policy actions and the actor's previous-action observation bounded.
+    # This still leaves ample range for G23 joint targets while preventing a rare
+    # action outlier from destabilizing the observation normalizer and value loss.
+    clip_actions=5.0,
     save_interval=50,
     num_steps_per_env=24,
     max_iterations=10_000,

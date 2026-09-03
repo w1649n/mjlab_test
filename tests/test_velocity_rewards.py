@@ -3,14 +3,25 @@
 from __future__ import annotations
 
 import math
+from types import SimpleNamespace
 from unittest.mock import MagicMock, PropertyMock
 
+import pytest
 import torch
 
 from mjlab.managers.reward_manager import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
-from mjlab.sensor import RayCastData, RayCastSensor
-from mjlab.tasks.velocity.mdp.rewards import upright
+from mjlab.sensor import RayCastData, RayCastSensor, TerrainHeightSensor
+from mjlab.tasks.velocity.mdp.rewards import (
+  base_height_l2,
+  feet_contact_count_standing,
+  feet_excessive_air_time,
+  feet_swing_height,
+  track_angular_velocity_yaw,
+  track_linear_velocity_xy,
+  upright,
+  vertical_velocity_l2,
+)
 from mjlab.utils.lab_api.math import quat_from_euler_xyz
 
 
@@ -188,3 +199,283 @@ def test_batch_consistency():
   assert r[1].item() > 0.99
   assert r[2].item() < 0.7
   assert r[3].item() > 0.99
+
+
+# 2026-09-02 stair-training update: verify each decoupled reward uses only its axis.
+def _make_velocity_env(
+  linear_velocity: torch.Tensor,
+  angular_velocity: torch.Tensor,
+  command: torch.Tensor,
+):
+  asset = MagicMock()
+  asset.data.root_link_lin_vel_b = linear_velocity
+  asset.data.root_link_ang_vel_b = angular_velocity
+
+  env = MagicMock()
+  env.scene.__getitem__ = MagicMock(side_effect=lambda name: {"robot": asset}[name])
+  env.command_manager.get_command.return_value = command
+  return env
+
+
+def test_track_linear_velocity_xy_ignores_vertical_velocity():
+  command = torch.tensor([[1.0, -0.5, 0.7], [0.0, 0.0, -0.2]])
+  linear_velocity = torch.tensor([[1.0, -0.5, 9.0], [0.3, 0.4, -8.0]])
+  env = _make_velocity_env(linear_velocity, torch.zeros(2, 3), command)
+
+  reward = track_linear_velocity_xy(env, std=0.5, command_name="twist")
+
+  torch.testing.assert_close(reward, torch.tensor([1.0, math.exp(-1.0)]))
+
+
+def test_track_angular_velocity_yaw_ignores_roll_and_pitch_rates():
+  command = torch.tensor([[0.0, 0.0, 0.5], [0.0, 0.0, -0.5]])
+  angular_velocity = torch.tensor([[10.0, -10.0, 0.5], [-8.0, 7.0, 0.0]])
+  env = _make_velocity_env(torch.zeros(2, 3), angular_velocity, command)
+
+  reward = track_angular_velocity_yaw(env, std=0.5, command_name="twist")
+
+  torch.testing.assert_close(reward, torch.tensor([1.0, math.exp(-1.0)]))
+
+
+def test_vertical_velocity_l2_uses_only_body_z_velocity():
+  linear_velocity = torch.tensor([[12.0, -6.0, 3.0], [-9.0, 4.0, -2.0]])
+  env = _make_velocity_env(linear_velocity, torch.zeros(2, 3), torch.zeros(2, 3))
+
+  torch.testing.assert_close(vertical_velocity_l2(env), torch.tensor([9.0, 4.0]))
+
+
+def test_base_height_l2_uses_mean_terrain_clearance():
+  height_sensor = MagicMock(spec=TerrainHeightSensor)
+  height_sensor.data.heights = torch.tensor([[0.3, 0.5], [0.45, 0.55]])
+  env = MagicMock()
+  env.scene.__getitem__ = MagicMock(
+    side_effect=lambda name: {"base_height_scan": height_sensor}[name]
+  )
+
+  cost = base_height_l2(env, target_height=0.4, height_sensor_name="base_height_scan")
+
+  torch.testing.assert_close(cost, torch.tensor([0.0, 0.01]))
+
+
+# 2026-09-02 anti-tripod update: pin continuous, capped per-foot air-time cost.
+def _make_contact_reward_env(
+  *,
+  primary_names: tuple[str, ...],
+  current_air_time: torch.Tensor | None = None,
+  found: torch.Tensor | None = None,
+  command: torch.Tensor | None = None,
+):
+  sensor = SimpleNamespace(
+    primary_names=list(primary_names),
+    data=SimpleNamespace(current_air_time=current_air_time, found=found),
+  )
+  command_manager = MagicMock()
+  command_manager.get_command.return_value = command
+  return SimpleNamespace(
+    scene={"feet_contact": sensor},
+    command_manager=command_manager,
+    extras={"log": {}},
+  )
+
+
+def test_feet_excessive_air_time_is_continuous_and_capped_per_foot():
+  env = _make_contact_reward_env(
+    primary_names=("FL/foot", "FR_foot", "RL-foot", "RR foot"),
+    current_air_time=torch.tensor([[0.0, 0.5, 0.75, 2.0], [0.51, 0.4, 1.0, 20.0]]),
+  )
+
+  cost = feet_excessive_air_time(
+    env, sensor_name="feet_contact", max_air_time=0.5, max_excess_time=0.5
+  )
+
+  torch.testing.assert_close(cost, torch.tensor([0.3125, 0.5001]))
+  log = env.extras["log"]
+  torch.testing.assert_close(
+    log["Metrics/anti_tripod/air_time_max"], torch.tensor(20.0)
+  )
+  torch.testing.assert_close(
+    log["Metrics/anti_tripod/air_time_excess_max"], torch.tensor(0.5)
+  )
+  torch.testing.assert_close(
+    log["Metrics/anti_tripod/air_time_mean/0_FL_foot"], torch.tensor(0.255)
+  )
+  assert "Metrics/anti_tripod/air_time_mean/3_RR_foot" in log
+
+
+@pytest.mark.parametrize(
+  ("max_air_time", "max_excess_time", "match"),
+  [
+    (-0.1, 0.5, "max_air_time"),
+    (math.inf, 0.5, "max_air_time"),
+    (0.5, 0.0, "max_excess_time"),
+    (0.5, math.nan, "max_excess_time"),
+  ],
+)
+def test_feet_excessive_air_time_validates_parameters(
+  max_air_time: float, max_excess_time: float, match: str
+):
+  env = _make_contact_reward_env(
+    primary_names=("foot",), current_air_time=torch.zeros(1, 1)
+  )
+
+  with pytest.raises(ValueError, match=match):
+    feet_excessive_air_time(
+      env,
+      sensor_name="feet_contact",
+      max_air_time=max_air_time,
+      max_excess_time=max_excess_time,
+    )
+
+
+def test_feet_excessive_air_time_requires_per_primary_tracking_shape():
+  missing = _make_contact_reward_env(primary_names=("FL", "FR"))
+  with pytest.raises(RuntimeError, match="track_air_time=True"):
+    feet_excessive_air_time(
+      missing, "feet_contact", max_air_time=0.5, max_excess_time=0.5
+    )
+
+  wrong_shape = _make_contact_reward_env(
+    primary_names=("FL", "FR"), current_air_time=torch.zeros(2, 3)
+  )
+  with pytest.raises(ValueError, match="3 columns, but 2 primaries"):
+    feet_excessive_air_time(
+      wrong_shape, "feet_contact", max_air_time=0.5, max_excess_time=0.5
+    )
+
+
+# 2026-09-02 anti-tripod update: verify stationary contact counting and slot reduction.
+def test_feet_contact_count_standing_only_penalizes_stationary_commands():
+  env = _make_contact_reward_env(
+    primary_names=("FL", "FR", "RL", "RR"),
+    found=torch.tensor(
+      [
+        [1, 1, 1, 0],
+        [1, 0, 0, 0],
+        [1, 1, 0, 0],
+      ]
+    ),
+    command=torch.tensor(
+      [
+        [0.0, 0.0, 0.0],
+        [0.051, 0.0, 0.0],
+        [0.03, 0.0, 0.02],
+      ]
+    ),
+  )
+
+  cost = feet_contact_count_standing(
+    env,
+    sensor_name="feet_contact",
+    command_name="twist",
+    required_contacts=4,
+    command_threshold=0.05,
+  )
+
+  torch.testing.assert_close(cost, torch.tensor([1.0, 0.0, 2.0]))
+  log = env.extras["log"]
+  torch.testing.assert_close(
+    log["Metrics/anti_tripod/standing_missing_contacts_max"], torch.tensor(2.0)
+  )
+  torch.testing.assert_close(
+    log["Metrics/anti_tripod/standing_contact_rate/0_FL"], torch.tensor(1.0)
+  )
+  torch.testing.assert_close(
+    log["Metrics/anti_tripod/standing_contact_rate/3_RR"], torch.tensor(0.0)
+  )
+
+
+def test_feet_contact_count_standing_reduces_multiple_slots_per_foot():
+  # Primary-major layout: [FL slot 0, FL slot 1, FR slot 0, FR slot 1].
+  env = _make_contact_reward_env(
+    primary_names=("FL", "FR"),
+    found=torch.tensor([[0, 2, 0, 0], [0, 0, 1, 3]]),
+    command=torch.zeros(2, 3),
+  )
+
+  cost = feet_contact_count_standing(
+    env,
+    sensor_name="feet_contact",
+    command_name="twist",
+    required_contacts=2,
+  )
+
+  torch.testing.assert_close(cost, torch.tensor([1.0, 1.0]))
+
+
+@pytest.mark.parametrize("required_contacts", [0, -1, 3])
+def test_feet_contact_count_standing_validates_required_contacts(
+  required_contacts: int,
+):
+  env = _make_contact_reward_env(
+    primary_names=("FL", "FR"),
+    found=torch.ones(1, 2),
+    command=torch.zeros(1, 3),
+  )
+
+  with pytest.raises(ValueError, match="required_contacts"):
+    feet_contact_count_standing(
+      env,
+      sensor_name="feet_contact",
+      command_name="twist",
+      required_contacts=required_contacts,
+    )
+
+
+def test_feet_contact_count_standing_validates_sensor_and_command_shapes():
+  malformed_sensor = _make_contact_reward_env(
+    primary_names=("FL", "FR"),
+    found=torch.ones(2, 3),
+    command=torch.zeros(2, 3),
+  )
+  with pytest.raises(ValueError, match="cannot be grouped"):
+    feet_contact_count_standing(
+      malformed_sensor, "feet_contact", "twist", required_contacts=2
+    )
+
+  malformed_command = _make_contact_reward_env(
+    primary_names=("FL", "FR"),
+    found=torch.ones(2, 2),
+    command=torch.zeros(1, 3),
+  )
+  with pytest.raises(ValueError, match="matching the contact batch"):
+    feet_contact_count_standing(
+      malformed_command, "feet_contact", "twist", required_contacts=2
+    )
+
+
+# 2026-09-02 anti-tripod update: swing peaks must not leak across episode resets.
+def test_feet_swing_height_partial_reset_only_clears_selected_envs():
+  height_sensor = MagicMock(spec=TerrainHeightSensor)
+  height_sensor.num_frames = 4
+  env = MagicMock()
+  env.scene.__getitem__ = MagicMock(
+    side_effect=lambda name: {"foot_height_scan": height_sensor}[name]
+  )
+  env.num_envs = 4
+  env.device = "cpu"
+  env.step_dt = 0.02
+  cfg = MagicMock(spec=RewardTermCfg)
+  cfg.params = {"height_sensor_name": "foot_height_scan"}
+  reward = feet_swing_height(cfg, env)
+  reward.peak_heights[:] = torch.tensor(
+    [
+      [0.1, 0.2, 0.3, 0.4],
+      [0.5, 0.6, 0.7, 0.8],
+      [0.9, 1.0, 1.1, 1.2],
+      [1.3, 1.4, 1.5, 1.6],
+    ]
+  )
+
+  reward.reset(torch.tensor([1, 3]))
+
+  torch.testing.assert_close(
+    reward.peak_heights,
+    torch.tensor(
+      [
+        [0.1, 0.2, 0.3, 0.4],
+        [0.0, 0.0, 0.0, 0.0],
+        [0.9, 1.0, 1.1, 1.2],
+        [0.0, 0.0, 0.0, 0.0],
+      ]
+    ),
+  )

@@ -116,6 +116,30 @@ class CurriculumManager(ManagerBase):
       state = term_cfg.func(self._env, env_ids, **term_cfg.params)
       self._curriculum_state[name] = state
 
+  # 2026-09-02 stair-training update: persist state owned by class-based terms.
+  def state_dict(self) -> dict[str, Any]:
+    """Collect checkpoint state exposed by stateful curriculum terms."""
+    state: dict[str, Any] = {}
+    for term_name, term_cfg in zip(self._term_names, self._term_cfgs, strict=False):
+      term_state_dict = getattr(term_cfg.func, "state_dict", None)
+      if callable(term_state_dict):
+        state[term_name] = term_state_dict()
+    return state
+
+  # 2026-09-02 stair-training update: restore only compatible active terms.
+  def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+    """Restore state for active curriculum terms that support loading.
+
+    Missing terms are left untouched and state for terms no longer present in the
+    configuration is ignored, allowing checkpoints to survive curriculum changes.
+    """
+    for term_name, term_cfg in zip(self._term_names, self._term_cfgs, strict=False):
+      if term_name not in state_dict:
+        continue
+      load_term_state = getattr(term_cfg.func, "load_state_dict", None)
+      if callable(load_term_state):
+        load_term_state(state_dict[term_name])
+
   def _prepare_terms(self):
     for term_name, term_cfg in self.cfg.items():
       term_cfg: CurriculumTermCfg | None
@@ -153,3 +177,11 @@ class NullCurriculumManager:
 
   def compute(self, env_ids: torch.Tensor | None = None) -> None:
     pass
+
+  # 2026-09-02 stair-training update: match the active manager checkpoint API.
+  def state_dict(self) -> dict[str, Any]:
+    return {}
+
+  # 2026-09-02 stair-training update: old/new checkpoints are both no-ops here.
+  def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+    del state_dict

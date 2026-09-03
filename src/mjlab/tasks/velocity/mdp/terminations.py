@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import torch
@@ -12,6 +13,31 @@ if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
 
 _DEFAULT_ASSET_CFG = SceneEntityCfg("robot")
+
+
+# 2026-09-02 anti-tripod update: end episodes that permanently park one foot
+# in the air, while leaving ample time for a deliberate stair swing.
+def prolonged_foot_air_time(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  max_air_time: float = 2.0,
+) -> torch.Tensor:
+  """Terminate when any foot has remained continuously airborne too long."""
+  if not math.isfinite(max_air_time) or max_air_time <= 0.0:
+    raise ValueError(f"max_air_time must be positive and finite, got {max_air_time}")
+  sensor: ContactSensor = env.scene[sensor_name]
+  current_air_time = sensor.data.current_air_time
+  if current_air_time is None:
+    raise RuntimeError(
+      f"Contact sensor '{sensor_name}' must set track_air_time=True for "
+      "prolonged_foot_air_time"
+    )
+  if current_air_time.ndim != 2:
+    raise ValueError(
+      f"Contact sensor '{sensor_name}' current_air_time must have shape [B, P], "
+      f"got {tuple(current_air_time.shape)}"
+    )
+  return torch.any(current_air_time > max_air_time, dim=1)
 
 
 def illegal_contact(

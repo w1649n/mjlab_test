@@ -1,3 +1,5 @@
+import math
+
 import torch
 from rsl_rl.env import VecEnv
 from tensordict import TensorDict
@@ -12,6 +14,12 @@ class RslRlVecEnvWrapper(VecEnv):
     env: ManagerBasedRlEnv,
     clip_actions: float | None = None,
   ):
+    if clip_actions is not None and (
+      not math.isfinite(clip_actions) or clip_actions <= 0.0
+    ):
+      raise ValueError(
+        f"clip_actions must be a positive finite value, got {clip_actions}."
+      )
     self.env = env
     self.clip_actions = clip_actions
 
@@ -72,15 +80,35 @@ class RslRlVecEnvWrapper(VecEnv):
   def step(
     self, actions: torch.Tensor
   ) -> tuple[TensorDict, torch.Tensor, torch.Tensor, dict]:
+    finite_actions = torch.isfinite(actions)
+    if not finite_actions.all():
+      nonfinite_count = int((~finite_actions).sum().item())
+      raise FloatingPointError(
+        "Policy produced "
+        f"{nonfinite_count} non-finite raw action value(s); refusing to step the "
+        "environment so invalid actions cannot enter PPO history."
+      )
+
+    raw_action_abs_max: torch.Tensor | None = None
+    raw_action_clip_fraction: torch.Tensor | None = None
     if self.clip_actions is not None:
+      raw_action_abs_max = actions.abs().amax()
+      raw_action_clip_fraction = (actions.abs() > self.clip_actions).float().mean()
       actions = torch.clamp(actions, -self.clip_actions, self.clip_actions)
     obs_dict, rew, terminated, truncated, extras = self.env.step(actions)
+    if raw_action_abs_max is not None and raw_action_clip_fraction is not None:
+      log = extras.setdefault("log", {})
+      log["Metrics/raw_action_step_abs_max"] = raw_action_abs_max
+      log["Metrics/raw_action_clip_fraction"] = raw_action_clip_fraction
     term_or_trunc = terminated | truncated
     assert isinstance(rew, torch.Tensor)
     assert isinstance(term_or_trunc, torch.Tensor)
     dones = term_or_trunc.to(dtype=torch.long)
     if not self.cfg.is_finite_horizon:
-      extras["time_outs"] = truncated
+      # 2026-09-02 stair-training update: RSL-RL bootstraps every transition
+      # marked as a timeout.  If a horizon timeout and a failure happen on the
+      # same step, the failure must take precedence and remain terminal.
+      extras["time_outs"] = truncated & ~terminated
     return (
       TensorDict(obs_dict, batch_size=[self.num_envs]),
       rew,

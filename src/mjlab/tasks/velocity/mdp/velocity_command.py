@@ -22,6 +22,22 @@ if TYPE_CHECKING:
   from mjlab.viewer.debug_visualizer import DebugVisualizer
 
 
+def _validate_directional_bucket_fractions(
+  rel_forward_envs: float, rel_backward_envs: float
+) -> None:
+  for name, value in (
+    ("rel_forward_envs", rel_forward_envs),
+    ("rel_backward_envs", rel_backward_envs),
+  ):
+    if not 0.0 <= value <= 1.0:
+      raise ValueError(f"{name} must be within [0, 1], got {value}.")
+  if rel_forward_envs + rel_backward_envs > 1.0:
+    raise ValueError(
+      "rel_forward_envs + rel_backward_envs must not exceed 1, got "
+      f"{rel_forward_envs + rel_backward_envs}."
+    )
+
+
 class UniformVelocityCommand(CommandTerm):
   cfg: UniformVelocityCommandCfg
 
@@ -32,6 +48,9 @@ class UniformVelocityCommand(CommandTerm):
       raise ValueError("heading_command=True but ranges.heading is set to None.")
     if self.cfg.ranges.heading and not self.cfg.heading_command:
       raise ValueError("ranges.heading is set but heading_command=False.")
+    _validate_directional_bucket_fractions(
+      self.cfg.rel_forward_envs, self.cfg.rel_backward_envs
+    )
 
     self.robot: Entity = env.scene[cfg.entity_name]
 
@@ -45,9 +64,23 @@ class UniformVelocityCommand(CommandTerm):
     self.is_standing_env = torch.zeros_like(self.is_heading_env)
     self.is_world_env = torch.zeros_like(self.is_heading_env)
     self.is_forward_env = torch.zeros_like(self.is_heading_env)
+    self.is_backward_env = torch.zeros_like(self.is_heading_env)
 
     self.metrics["error_vel_xy"] = torch.zeros(self.num_envs, device=self.device)
     self.metrics["error_vel_yaw"] = torch.zeros(self.num_envs, device=self.device)
+
+    # 2026-09-02 stair-training update: keep per-episode, per-direction
+    # tracking statistics for performance-gated command curricula.  These are
+    # intentionally separate from ``metrics``: the curriculum consumes the
+    # per-environment values before CommandTerm.reset() aggregates them.
+    self._forward_tracking_sum = torch.zeros(self.num_envs, device=self.device)
+    self._forward_tracking_count = torch.zeros(
+      self.num_envs, dtype=torch.long, device=self.device
+    )
+    self._backward_tracking_sum = torch.zeros(self.num_envs, device=self.device)
+    self._backward_tracking_count = torch.zeros(
+      self.num_envs, dtype=torch.long, device=self.device
+    )
 
     # Set by create_gui() when the viewer is active.
     self._joystick_enabled: viser.GuiCheckboxHandle | None = None
@@ -118,6 +151,7 @@ class UniformVelocityCommand(CommandTerm):
     self.is_standing_env[env_idx] = False
     self.is_world_env[env_idx] = False
     self.is_forward_env[env_idx] = False
+    self.is_backward_env[env_idx] = False
     self.vel_command_b[env_idx] = self._manual_command_b[env_idx]
     self.vel_command_w[env_idx] = self._manual_command_b[env_idx]
     self._disable_joystick_override()
@@ -162,6 +196,59 @@ class UniformVelocityCommand(CommandTerm):
       / max_command_step
     )
 
+  # 2026-09-02 stair-training update: expose the completed episode's raw
+  # directional accumulators without resetting them.  Curriculum terms run
+  # before command reset, so callers can safely select the resetting envs.
+  def get_directional_tracking_stats(
+    self, env_ids: torch.Tensor
+  ) -> dict[str, torch.Tensor]:
+    return {
+      "forward_tracking_sum": self._forward_tracking_sum[env_ids],
+      "forward_tracking_count": self._forward_tracking_count[env_ids],
+      "backward_tracking_sum": self._backward_tracking_sum[env_ids],
+      "backward_tracking_count": self._backward_tracking_count[env_ids],
+    }
+
+  # 2026-09-02 stair-training update: a resumed curriculum may restore a
+  # later command stage after the environment's initial stage-0 reset.
+  def resample_after_curriculum_restore(self) -> None:
+    """Resample every command from the restored stage without changing robot state."""
+    env_ids = torch.arange(self.num_envs, device=self.device)
+    self._forward_tracking_sum.zero_()
+    self._forward_tracking_count.zero_()
+    self._backward_tracking_sum.zero_()
+    self._backward_tracking_count.zero_()
+    self._resample(env_ids)
+    self._update_command(env_ids)
+    self._apply_manual_commands()
+    self._invalidate_observation_cache()
+
+  def _accumulate_directional_tracking(self, dt: float | torch.Tensor) -> None:
+    """Accumulate bounded planar tracking scores for positive-duration steps."""
+    if isinstance(dt, torch.Tensor):
+      active = dt.to(device=self.device) > 0.0
+    else:
+      if dt <= 0.0:
+        return
+      active = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+
+    planar_error_sq = torch.sum(
+      torch.square(
+        self.vel_command_b[:, :2] - self.robot.data.root_link_lin_vel_b[:, :2]
+      ),
+      dim=-1,
+    )
+    # Match the linear-velocity reward's 0.5 m/s kernel width while excluding
+    # vertical velocity, which is expected during stair traversal.
+    tracking_score = torch.exp(-planar_error_sq / 0.5**2)
+
+    forward = self.is_forward_env & active
+    backward = self.is_backward_env & active
+    self._forward_tracking_sum += tracking_score * forward
+    self._forward_tracking_count += forward
+    self._backward_tracking_sum += tracking_score * backward
+    self._backward_tracking_count += backward
+
   def _resample_command(self, env_ids: torch.Tensor) -> None:
     r = torch.empty(len(env_ids), device=self.device)
     self.vel_command_b[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
@@ -178,9 +265,28 @@ class UniformVelocityCommand(CommandTerm):
     # Copy sampled velocities as world-frame reference for world envs.
     self.vel_command_w[env_ids] = self.vel_command_b[env_ids]
 
-    # Forward-only envs: positive lin_vel_x, zero lateral and angular.
-    self.is_forward_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_forward_envs
-    fwd_ids = env_ids[self.is_forward_env[env_ids]]
+    # Draw mutually exclusive straight-forward and straight-backward buckets.
+    # Standing commands are independent and take precedence, so exclude them
+    # from the directional masks and let _update_command() zero them as usual.
+    selector = r.uniform_(0.0, 1.0)
+    is_non_standing = ~self.is_standing_env[env_ids]
+    is_forward = (selector < self.cfg.rel_forward_envs) & is_non_standing
+    is_backward = (
+      (selector >= self.cfg.rel_forward_envs)
+      & (selector < self.cfg.rel_forward_envs + self.cfg.rel_backward_envs)
+      & is_non_standing
+    )
+    self.is_forward_env[env_ids] = is_forward
+    self.is_backward_env[env_ids] = is_backward
+
+    # Dedicated directional buckets are body-frame straight commands. Prevent
+    # later heading control or world-frame rotation from changing their yaw or
+    # lateral velocity.
+    directional_ids = env_ids[is_forward | is_backward]
+    self.is_heading_env[directional_ids] = False
+    self.is_world_env[directional_ids] = False
+
+    fwd_ids = env_ids[is_forward]
     if len(fwd_ids) > 0:
       self.vel_command_b[fwd_ids, 0] = (
         self.vel_command_b[fwd_ids, 0].abs().clamp(min=0.3)
@@ -188,8 +294,25 @@ class UniformVelocityCommand(CommandTerm):
       self.vel_command_b[fwd_ids, 1] = 0.0
       self.vel_command_b[fwd_ids, 2] = 0.0
 
+    bwd_ids = env_ids[is_backward]
+    if len(bwd_ids) > 0:
+      self.vel_command_b[bwd_ids, 0] = (
+        -self.vel_command_b[bwd_ids, 0].abs().clamp(min=0.3)
+      )
+      self.vel_command_b[bwd_ids, 1] = 0.0
+      self.vel_command_b[bwd_ids, 2] = 0.0
+
+    self.vel_command_w[directional_ids] = self.vel_command_b[directional_ids]
+
   def reset(self, env_ids: torch.Tensor | slice | None) -> dict[str, float]:
     extras = super().reset(env_ids)
+    # 2026-09-02 stair-training update: reset only the requested environments;
+    # asynchronous vector-environment episodes must retain their own statistics.
+    assert isinstance(env_ids, torch.Tensor)
+    self._forward_tracking_sum[env_ids] = 0.0
+    self._forward_tracking_count[env_ids] = 0
+    self._backward_tracking_sum[env_ids] = 0.0
+    self._backward_tracking_count[env_ids] = 0
     self._apply_manual_commands()
     if self.cfg.init_velocity_prob > 0.0:
       assert isinstance(env_ids, torch.Tensor)
@@ -293,6 +416,10 @@ class UniformVelocityCommand(CommandTerm):
   def compute(
     self, dt: float | torch.Tensor, env_ids: torch.Tensor | None = None
   ) -> None:
+    # 2026-09-02 stair-training update: measure the command that governed the
+    # just-finished step before timer expiry can resample it.  A per-env zero dt
+    # on auto-reset prevents freshly reset environments from adding a fake sample.
+    self._accumulate_directional_tracking(dt)
     super().compute(dt, env_ids)
     self._apply_manual_commands()
     if self._joystick_enabled is not None and self._joystick_enabled.value:
@@ -385,9 +512,14 @@ class UniformVelocityCommandCfg(CommandTermCfg):
   World-frame envs sample linear velocity in world frame and rotate to body
   frame each step, so the command direction stays fixed in the world."""
   rel_forward_envs: float = 0.0
-  """Fraction of environments that receive forward-only commands (positive
-  lin_vel_x, zero lin_vel_y and ang_vel_z). Increases training coverage for
-  straight-line walking, which is important for stair climbing."""
+  """Fraction of non-standing environments that receive straight-forward
+  body-frame commands (positive lin_vel_x, zero lin_vel_y and ang_vel_z).
+  Forward and backward buckets are mutually exclusive."""
+  rel_backward_envs: float = 0.0
+  """Fraction of non-standing environments that receive straight-backward
+  body-frame commands (negative lin_vel_x, zero lin_vel_y and ang_vel_z).
+  The remaining ``1 - rel_forward_envs - rel_backward_envs`` environments use
+  general sampled commands."""
   init_velocity_prob: float = 0.0
   """Probability that an env starts its episode already moving at its sampled
   planar command velocity. Applied on reset only."""
@@ -412,6 +544,9 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     return UniformVelocityCommand(self, env)
 
   def __post_init__(self):
+    _validate_directional_bucket_fractions(
+      self.rel_forward_envs, self.rel_backward_envs
+    )
     if self.heading_command and self.ranges.heading is None:
       raise ValueError(
         "The velocity command has heading commands active (heading_command=True) but "

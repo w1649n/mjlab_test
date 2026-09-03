@@ -647,7 +647,7 @@ if [[ $DRY_RUN == true ]]; then
   exit 0
 fi
 
-prompt_yes_no "開始播放？" no
+prompt_yes_no "開始播放？" yes
 [[ $ANSWER == True ]] || cancel
 
 cd -- "$RUN_PROJECT"
