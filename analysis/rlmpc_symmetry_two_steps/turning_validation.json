@@ -1,0 +1,98 @@
+[
+  {
+    "variant": "new_policy_controller",
+    "checkpoint": "/home/robotserver3/robert/mjlab_test/logs/rsl_rl/g23_rl_mpc_foot_state_history_v3/2026-09-10_10-23-31/model_400.pt",
+    "command": [
+      0.0,
+      0.1,
+      0.0
+    ],
+    "tracking_mae": [
+      0.03130796916782856,
+      0.024377717159688495,
+      0.08059008037671447
+    ],
+    "touchdown_samples": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "mean_touchdown_x_body_m": [
+      0.1788255013525486,
+      0.19149259105324745,
+      -0.16846326366066933,
+      -0.1850353702902794
+    ],
+    "rear_touchdown_x_difference_m": -0.01657210662961006,
+    "mean_touchdown_residual_x_m": [
+      -0.014999999664723873,
+      -0.013731765560805798,
+      0.0024999999441206455,
+      -0.0024999999441206455
+    ],
+    "stop_diagonal_launches": [
+      [
+        0,
+        3
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    "stop_pose_rmse_rad": 0.030163487843752994,
+    "stop_tail_modes": [
+      2
+    ],
+    "terminated": false
+  },
+  {
+    "variant": "new_policy_controller",
+    "checkpoint": "/home/robotserver3/robert/mjlab_test/logs/rsl_rl/g23_rl_mpc_foot_state_history_v3/2026-09-10_10-23-31/model_400.pt",
+    "command": [
+      0.0,
+      0.0,
+      0.3
+    ],
+    "tracking_mae": [
+      0.03683154601603746,
+      0.023001116421073674,
+      0.08467448875308038
+    ],
+    "touchdown_samples": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "mean_touchdown_x_body_m": [
+      0.1781768500804901,
+      0.19121679291129112,
+      -0.17807616665959358,
+      -0.17420853301882744
+    ],
+    "rear_touchdown_x_difference_m": 0.003867633640766144,
+    "mean_touchdown_residual_x_m": [
+      -0.014999999664723873,
+      -0.014999999664723873,
+      0.0024999999441206455,
+      -0.0024999999441206455
+    ],
+    "stop_diagonal_launches": [
+      [
+        0,
+        3
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    "stop_pose_rmse_rad": 0.03721961971774375,
+    "stop_tail_modes": [
+      2
+    ],
+    "terminated": false
+  }
+]

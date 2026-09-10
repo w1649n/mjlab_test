@@ -1,0 +1,95 @@
+[
+  {
+    "variant": "pure_mpc",
+    "touchdown_samples": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "mean_touchdown_x_body_m": [
+      0.21401958540081978,
+      0.22238658368587494,
+      -0.15291881747543812,
+      -0.1529097631573677
+    ],
+    "rear_touchdown_x_difference_m": 9.054318070411682e-06,
+    "mean_touchdown_residual_x_m": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "stop_diagonal_launches": [],
+    "stop_pose_rmse_rad": 0.03083291136626846,
+    "stop_tail_modes": [
+      2
+    ],
+    "terminated": false
+  },
+  {
+    "variant": "old_policy_controller",
+    "touchdown_samples": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "mean_touchdown_x_body_m": [
+      0.24081900902092457,
+      0.2107764668762684,
+      -0.1855667196214199,
+      -0.07438964676111937
+    ],
+    "rear_touchdown_x_difference_m": 0.11117707286030054,
+    "mean_touchdown_residual_x_m": [
+      0.0130846977699548,
+      0.006902175839059055,
+      -0.012399607920087874,
+      -0.06255502719432116
+    ],
+    "stop_diagonal_launches": [],
+    "stop_pose_rmse_rad": 0.14059356503676904,
+    "stop_tail_modes": [
+      2
+    ],
+    "terminated": false
+  },
+  {
+    "variant": "new_policy_controller",
+    "touchdown_samples": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "mean_touchdown_x_body_m": [
+      0.21834535710513592,
+      0.22560400143265724,
+      -0.16290299594402313,
+      -0.16465014033019543
+    ],
+    "rear_touchdown_x_difference_m": -0.0017471443861722946,
+    "mean_touchdown_residual_x_m": [
+      -0.00022888806415721774,
+      -0.00022888806415721774,
+      -0.014547477359883487,
+      -0.014547477359883487
+    ],
+    "stop_diagonal_launches": [
+      [
+        0,
+        3
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    "stop_pose_rmse_rad": 0.05232164753423454,
+    "stop_tail_modes": [
+      2
+    ],
+    "terminated": false
+  }
+]

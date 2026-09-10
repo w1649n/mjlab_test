@@ -8,6 +8,13 @@ Upcoming version (not yet released)
 Added
 ^^^^^
 
+- Added an interactive RLMPC ONNX export shell script with run/checkpoint
+  selection, custom output paths, overwrite confirmation, and dry-run support.
+
+- Added a dedicated G23 RL-MPC checkpoint exporter that produces the fixed
+  234-observation, 8-action ``mjlab_foot_v1`` ONNX deployment contract, embeds
+  its learned observation normalizer and metadata, and verifies ONNX Runtime
+  parity before publishing the model.
 - Added non-blocking terminal keyboard control for velocity tasks in ``play``.
   Commands start in random mode; press ``M`` to switch between random and manual,
   use ``W``/``S``, ``A``/``D``, and ``Q``/``E`` to adjust planar velocity and yaw,
@@ -17,9 +24,49 @@ Added
 Changed
 ^^^^^^^
 
+- Made G23 RLMPC home-step order continue from the last walking diagonal,
+  including zero-swing exchange ticks, instead of always starting FL/HR.
+
+- Bounded G23 RLMPC turning and lateral residuals instead of disabling pair
+  constraints: per-foot limits are 1.5 cm X / 0.75 cm Y, paired X difference is
+  limited to 5 mm, and Y mirror error to 5 mm. The complete-cycle latch and
+  excess-correction training penalty now also cover these commands.
+
+- Changed G23 RLMPC straight walking to latch mirrored left/right residuals
+  for a complete gait cycle, with a matching training penalty. Stopping now
+  finishes the current swing, takes two zero-command diagonal steps toward
+  the reset stance, and confirms stable contact before entering STAND.
+
+- Changed the G23 RL-MPC actor and critic to five complete 75D observation
+  frames (375D), including MPC footholds, measured/planned contacts, applied
+  foot forces, physical previous offsets and gait mode. Histories are newest
+  first and reset by repeating the initial frame. Exports use
+  ``mjlab_foot_state_history_v3``; the 8D action, 50 Hz policy/MPC, 0.5 s gait
+  and stopped-pose penalty are retained.
+
+- Changed G23 RL-MPC training to a blind 71D actor with four clipped past
+  actions (newest first), 50 Hz policy/MPC and an independent 0.5 s trot.
+  Removed terrain scans and their reward consumers; added a stopped-home-pose
+  joint penalty. New checkpoints export as ``mjlab_foot_history_v2``.
+
 - Bumped ``rsl-rl-lib`` from 5.4.2 to 5.5.0. This update removes the ``logger_type``
   attribute of the ``rsl_rl.utils.Logger``, so code that previously checked
   ``logger.logger_type`` must instead check the type of ``logger.writer``.
+
+Fixed
+^^^^^
+
+- Preserved the scheduled support pair through a transient contact-sensor gap
+  at the G23 RL-MPC TROT-to-STOPPING boundary, while confirmed STAND contact
+  losses still enter recovery immediately.
+- Stabilized the SyncAI G23 RL-MPC standing controller, made touchdown height
+  follow the scanned terrain, armed four-foot support before the first swing,
+  integrated desired yaw across the SyncAI MPC horizon, added safe handling for
+  failed contact-force solves, added velocity-tracking checks and exact command
+  handling to the pure-MPC gate, and reduced runaway foot-placement exploration
+  during resumed training. Isolated heightfield-seam ray misses now use the
+  nearest valid same-environment height during training, while incomplete scans
+  reset only their affected environment and the pure-MPC gate remains strict.
 
 Version 1.6.0 (August 8, 2026)
 ------------------------------

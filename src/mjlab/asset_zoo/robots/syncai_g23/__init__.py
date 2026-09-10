@@ -2,4 +2,5 @@
 
 from .g23_constants import G23_ACTION_SCALE as G23_ACTION_SCALE
 from .g23_constants import G23_GETUP_ACTION_SCALE as G23_GETUP_ACTION_SCALE
+from .g23_constants import get_g23_rl_mpc_robot_cfg as get_g23_rl_mpc_robot_cfg
 from .g23_constants import get_g23_robot_cfg as get_g23_robot_cfg

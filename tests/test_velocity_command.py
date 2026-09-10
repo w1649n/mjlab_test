@@ -31,6 +31,7 @@ def _make_velocity_command(
   rel_world_envs: float = 0.0,
   rel_forward_envs: float = 0.0,
   rel_backward_envs: float = 0.0,
+  sample_single_axis_commands: bool = False,
 ):
   scene, sim = make_scene_and_sim(
     device,
@@ -52,6 +53,7 @@ def _make_velocity_command(
     rel_world_envs=rel_world_envs,
     rel_forward_envs=rel_forward_envs,
     rel_backward_envs=rel_backward_envs,
+    sample_single_axis_commands=sample_single_axis_commands,
     heading_command=heading_command,
     ranges=ranges
     or UniformVelocityCommandCfg.Ranges(
@@ -212,6 +214,56 @@ def test_forward_and_backward_buckets_are_mutually_exclusive(device):
   assert (term.command[term.is_forward_env, 0] >= 0.3).all()
   assert (term.command[term.is_backward_env, 0] <= -0.3).all()
   assert torch.equal(term.command[:, 1:], torch.zeros_like(term.command[:, 1:]))
+
+
+@pytest.mark.parametrize(
+  ("rel_forward_envs", "rel_backward_envs", "expected_min", "expected_max"),
+  [
+    (1.0, 0.0, 0.3, 0.5),
+    (0.0, 1.0, -0.3, -0.3),
+  ],
+)
+def test_directional_buckets_respect_asymmetric_two_sided_x_range(
+  device,
+  rel_forward_envs,
+  rel_backward_envs,
+  expected_min,
+  expected_max,
+):
+  term = _make_velocity_command(
+    device,
+    num_envs=128,
+    rel_forward_envs=rel_forward_envs,
+    rel_backward_envs=rel_backward_envs,
+    ranges=UniformVelocityCommandCfg.Ranges(
+      lin_vel_x=(-0.3, 0.5),
+      lin_vel_y=(-0.15, 0.15),
+      ang_vel_z=(-0.5, 0.5),
+    ),
+  )
+
+  assert (term.command[:, 0] >= expected_min).all()
+  assert (term.command[:, 0] <= expected_max).all()
+  assert torch.equal(term.command[:, 1:], torch.zeros_like(term.command[:, 1:]))
+
+
+def test_single_axis_sampling_masks_general_commands_and_frame_modes(device):
+  torch.manual_seed(0)
+  term = _make_velocity_command(
+    device,
+    num_envs=128,
+    heading_command=True,
+    rel_heading_envs=1.0,
+    rel_world_envs=1.0,
+    sample_single_axis_commands=True,
+  )
+
+  assert torch.all(torch.count_nonzero(term.command, dim=1) <= 1)
+  assert torch.all(torch.count_nonzero(term.vel_command_w, dim=1) <= 1)
+  assert not term.is_heading_env.any()
+  assert not term.is_world_env.any()
+  assert not term.is_forward_env.any()
+  assert not term.is_backward_env.any()
 
 
 def test_curriculum_restore_resamples_commands_from_restored_ranges(device):

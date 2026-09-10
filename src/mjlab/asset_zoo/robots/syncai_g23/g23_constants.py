@@ -4,7 +4,7 @@ from pathlib import Path
 
 import mujoco
 
-from mjlab.actuator import BuiltinPositionActuatorCfg
+from mjlab.actuator import BuiltinMotorActuatorCfg, BuiltinPositionActuatorCfg
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 from mjlab.utils.spec_config import CollisionCfg
 
@@ -64,6 +64,21 @@ G23_KNEE_ACTUATOR = BuiltinPositionActuatorCfg(
   delay_max_lag=1,
 )
 
+# RL-MPC bypasses MuJoCo's position servos and writes the controller's joint
+# torques directly.  Keep these actuators separate from the existing locomotion
+# configuration so position-policy checkpoints retain their original semantics.
+G23_RLMPC_HIP_ACTUATOR = BuiltinMotorActuatorCfg(
+  target_names_expr=(r".*_Hip[XY]_joint",),
+  effort_limit=24.0,
+  armature=0.0,
+)
+
+G23_RLMPC_KNEE_ACTUATOR = BuiltinMotorActuatorCfg(
+  target_names_expr=(r".*_Knee_joint",),
+  effort_limit=36.0,
+  armature=0.0,
+)
+
 
 ##
 # Initial state.
@@ -75,6 +90,19 @@ HOME_KEYFRAME = EntityCfg.InitialStateCfg(
     r".*_HipX_joint": 0.0,
     r".*_HipY_joint": -0.65,
     r".*_Knee_joint": 1.3,
+  },
+  joint_vel={r".*": 0.0},
+)
+
+# Match the initial stance used by the G23 MPC controller.  This is deliberately
+# not the shared velocity-task keyframe: changing HOME_KEYFRAME would invalidate
+# the existing joint-position tasks and their checkpoints.
+G23_RLMPC_HOME_KEYFRAME = EntityCfg.InitialStateCfg(
+  pos=(0.0, 0.0, 0.32),
+  joint_pos={
+    r".*_HipX_joint": 0.0,
+    r".*_HipY_joint": -0.8,
+    r".*_Knee_joint": 1.6,
   },
   joint_vel={r".*": 0.0},
 )
@@ -115,6 +143,11 @@ G23_ARTICULATION = EntityArticulationInfoCfg(
   soft_joint_pos_limit_factor=0.99,
 )
 
+G23_RLMPC_ARTICULATION = EntityArticulationInfoCfg(
+  actuators=(G23_RLMPC_HIP_ACTUATOR, G23_RLMPC_KNEE_ACTUATOR),
+  soft_joint_pos_limit_factor=0.99,
+)
+
 
 def get_g23_robot_cfg() -> EntityCfg:
   """Return a fresh G23 robot configuration."""
@@ -123,6 +156,17 @@ def get_g23_robot_cfg() -> EntityCfg:
     collisions=(FULL_COLLISION,),
     spec_fn=get_spec,
     articulation=G23_ARTICULATION,
+    sort_actuators=True,
+  )
+
+
+def get_g23_rl_mpc_robot_cfg() -> EntityCfg:
+  """Return a fresh torque-actuated G23 configuration for RL-MPC."""
+  return EntityCfg(
+    init_state=G23_RLMPC_HOME_KEYFRAME,
+    collisions=(FULL_COLLISION,),
+    spec_fn=get_spec,
+    articulation=G23_RLMPC_ARTICULATION,
     sort_actuators=True,
   )
 

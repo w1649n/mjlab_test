@@ -1,0 +1,538 @@
+{
+  "Metrics/slip_velocity_mean": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.029090059679001568,
+    "previous100": 0.030091275721788407,
+    "last100": 0.030124837048351765,
+    "last": 0.027923068031668663
+  },
+  "Metrics/landing_force_mean": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 65.03579401016235,
+    "previous100": 79.14156322479248,
+    "last100": 79.75981338500976,
+    "last": 69.33413696289062
+  },
+  "Metrics/anti_tripod/air_time_max": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.22992700546979905,
+    "previous100": 0.231691585034132,
+    "last100": 0.24681657433509827,
+    "last": 0.22999992966651917
+  },
+  "Metrics/anti_tripod/air_time_excess_max": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.0042270772159099575,
+    "previous100": 0.0,
+    "last100": 0.0026645755022764207,
+    "last": 0.0
+  },
+  "Metrics/anti_tripod/air_time_mean/0_FL_foot_collision": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.034239710129331795,
+    "previous100": 0.036620048023760315,
+    "last100": 0.03660403257235885,
+    "last": 0.03733072429895401
+  },
+  "Metrics/anti_tripod/air_time_mean/1_FR_foot_collision": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.035405074898153546,
+    "previous100": 0.03702063431963325,
+    "last100": 0.03742838164791465,
+    "last": 0.03875650465488434
+  },
+  "Metrics/anti_tripod/air_time_mean/2_HL_foot_collision": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.037605920042842626,
+    "previous100": 0.04011002155020833,
+    "last100": 0.04026288580149412,
+    "last": 0.04049478843808174
+  },
+  "Metrics/anti_tripod/air_time_mean/3_HR_foot_collision": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.03622421463020146,
+    "previous100": 0.03873918835073709,
+    "last100": 0.039425320848822595,
+    "last": 0.040410153567790985
+  },
+  "Metrics/anti_tripod/standing_fraction": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.36458334043622015,
+    "previous100": 0.29878906831145285,
+    "last100": 0.31390625655651094,
+    "last": 0.27734375
+  },
+  "Metrics/anti_tripod/standing_missing_contacts_max": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 1.2395833575725554,
+    "previous100": 1.050416696034372,
+    "last100": 1.5166666996106506,
+    "last": 1.2083333730697632
+  },
+  "Metrics/anti_tripod/standing_contact_rate/0_FL_foot_collision": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.9564273685216904,
+    "previous100": 0.9622049349546432,
+    "last100": 0.9386573803424835,
+    "last": 0.9490740299224854
+  },
+  "Metrics/anti_tripod/standing_contact_rate/1_FR_foot_collision": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.9495853632688522,
+    "previous100": 0.9611795675754548,
+    "last100": 0.9388042795658111,
+    "last": 0.9861111044883728
+  },
+  "Metrics/anti_tripod/standing_contact_rate/2_HL_foot_collision": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.9469735616445542,
+    "previous100": 0.9583671772480011,
+    "last100": 0.9355935293436051,
+    "last": 0.9861111044883728
+  },
+  "Metrics/anti_tripod/standing_contact_rate/3_HR_foot_collision": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.9519973057508468,
+    "previous100": 0.9587413907051087,
+    "last100": 0.9352636104822158,
+    "last": 0.9444444179534912
+  },
+  "Metrics/raw_action_step_abs_max": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 1.9807722413539885,
+    "previous100": 2.775409257411957,
+    "last100": 2.834201419353485,
+    "last": 2.9252662658691406
+  },
+  "Metrics/raw_action_clip_fraction": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.37008301734924315,
+    "previous100": 0.33618327736854553,
+    "last100": 0.3053824956715107,
+    "last": 0.3063151240348816
+  },
+  "Loss/value": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.05489281573565677,
+    "previous100": 0.011655392227694392,
+    "last100": 0.030984968545380978,
+    "last": 0.009479174390435219
+  },
+  "Loss/surrogate": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": -0.023844976658001543,
+    "previous100": -0.024293822711333634,
+    "last100": -0.024587454684078695,
+    "last": -0.027252227067947388
+  },
+  "Loss/entropy": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.02991343572968617,
+    "previous100": -0.7424668461084366,
+    "last100": -0.7547319394350052,
+    "last": -0.7545983195304871
+  },
+  "Loss/learning_rate": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 1.0124999753315934e-05,
+    "previous100": 9.999999747378752e-06,
+    "last100": 9.999999747378752e-06,
+    "last": 9.999999747378752e-06
+  },
+  "Policy/mean_std": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.2429025512933731,
+    "previous100": 0.22072128981351852,
+    "last100": 0.22041810408234597,
+    "last": 0.22043326497077942
+  },
+  "Perf/total_fps": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 307.86,
+    "previous100": 303.91,
+    "last100": 305.15,
+    "last": 301.0
+  },
+  "Perf/collection_time": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 2.4389921855926513,
+    "previous100": 2.4665064215660095,
+    "last100": 2.4563566875457763,
+    "last": 2.4878578186035156
+  },
+  "Perf/learning_time": {
+    "first_step": 400,
+    "last_step": 2482,
+    "first100": 0.05712657690048218,
+    "previous100": 0.05762807369232178,
+    "last100": 0.057327170372009274,
+    "last": 0.059105634689331055
+  },
+  "Episode_Reward/track_linear_velocity": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 1.823017449080944,
+    "previous100": 1.908536645770073,
+    "last100": 1.9448043584823609,
+    "last": 1.9900476932525635
+  },
+  "Episode_Reward/track_angular_velocity": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 1.844712302684784,
+    "previous100": 1.9195756071805954,
+    "last100": 1.9570730459690093,
+    "last": 1.995584487915039
+  },
+  "Episode_Reward/upright": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.9315009325742721,
+    "previous100": 0.9694172132015229,
+    "last100": 0.9871650394797326,
+    "last": 0.9897754788398743
+  },
+  "Episode_Reward/pose": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.6014555024728179,
+    "previous100": 0.6593149293586612,
+    "last100": 0.6902088328450918,
+    "last": 0.1680556833744049
+  },
+  "Episode_Reward/body_ang_vel": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.0017439231953176205,
+    "previous100": -0.0010060728413691321,
+    "last100": -0.0012009371256863233,
+    "last": -0.0002796280896291137
+  },
+  "Episode_Reward/angular_momentum": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.0,
+    "previous100": 0.0,
+    "last100": 0.0,
+    "last": 0.0
+  },
+  "Episode_Reward/dof_pos_limits": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.0005588549119882202,
+    "previous100": -0.00019046272480409244,
+    "last100": -0.00018531227568018948,
+    "last": 0.0
+  },
+  "Episode_Reward/action_rate_l2": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.01634875979507342,
+    "previous100": -0.017172199850901963,
+    "last100": -0.01650128054898232,
+    "last": -0.008620663546025753
+  },
+  "Episode_Reward/air_time": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.0,
+    "previous100": 0.0,
+    "last100": 0.0,
+    "last": 0.0
+  },
+  "Episode_Reward/foot_slip": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.0060835475142812356,
+    "previous100": -0.005611096200634022,
+    "last100": -0.006707100806524977,
+    "last": -0.0010238277027383447
+  },
+  "Episode_Reward/soft_landing": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.0005420462988422514,
+    "previous100": -0.0005394767132747802,
+    "last100": -0.0005822481909126509,
+    "last": -9.316057548858225e-05
+  },
+  "Episode_Reward/excessive_foot_air_time": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.0008987719494444945,
+    "previous100": -7.76134015450225e-05,
+    "last100": -7.087616017088294e-05,
+    "last": 0.0
+  },
+  "Episode_Reward/standing_missing_foot_contacts": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.045131184519850646,
+    "previous100": -0.04124782118247822,
+    "last100": -0.02732294908433687,
+    "last": -0.003000000026077032
+  },
+  "Episode_Reward/vertical_velocity_l2": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.0023710031028895172,
+    "previous100": -0.001573302541473822,
+    "last100": -0.0016562289613648317,
+    "last": -0.00039254873991012573
+  },
+  "Episode_Reward/electrical_power": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.00022240217452690558,
+    "previous100": -0.0001917181385300637,
+    "last100": -0.00020247718999598873,
+    "last": -4.393171548144892e-05
+  },
+  "Episode_Reward/joint_acc_l2": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.22643383188173175,
+    "previous100": -0.19372298672693433,
+    "last100": -0.2151507256180048,
+    "last": -0.03943232074379921
+  },
+  "Episode_Reward/action_acc_l2": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.008840798819437622,
+    "previous100": -0.009178479979746045,
+    "last100": -0.00909830728545785,
+    "last": -0.005897043272852898
+  },
+  "Episode_Reward/self_collisions": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -6.0666670760838317e-05,
+    "previous100": -0.00013350001332582907,
+    "last100": -4.066666850121692e-05,
+    "last": 0.0
+  },
+  "Episode_Reward/shank_collision": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.0004156198733653582,
+    "previous100": -0.00027244044176768514,
+    "last100": -7.141666668758262e-05,
+    "last": 0.0
+  },
+  "Episode_Reward/torso_collision": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -5.833333736518398e-05,
+    "previous100": -2.8666668076766654e-05,
+    "last100": -1.5000000712461769e-05,
+    "last": 0.0
+  },
+  "Episode_Reward/joint_torques_l2": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.0080505433678627,
+    "previous100": -0.008453374600503594,
+    "last100": -0.008725266917608679,
+    "last": -0.004409577697515488
+  },
+  "Episode_Reward/foot_placement_offset_l2": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.09212183468043804,
+    "previous100": -0.08549185670912265,
+    "last100": -0.08163671184331178,
+    "last": -0.10615332424640656
+  },
+  "Episode_Reward/foot_placement_lateral_offset_l2": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.0926539902575314,
+    "previous100": -0.08410710748285055,
+    "last100": -0.07816540099680423,
+    "last": -0.09119514375925064
+  },
+  "Episode_Reward/straight_foot_placement_symmetry": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.18584433323703706,
+    "previous100": -0.10761005405336618,
+    "last100": -0.11114811472594738,
+    "last": -0.0162791945040226
+  },
+  "Episode_Reward/stopped_joint_pose_l2": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": -0.07838635268155486,
+    "previous100": -0.04022251648595557,
+    "last100": -0.03483920341590419,
+    "last": -0.13134661316871643
+  },
+  "Episode_Metrics/mean_action_acc": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.3197447495162487,
+    "previous100": 0.3274585032463074,
+    "last100": 0.33062272116541863,
+    "last": 0.2293407917022705
+  },
+  "Episode_Metrics/mean_abs_lateral_foot_placement_action": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.6220731550455093,
+    "previous100": 0.5691881299018859,
+    "last100": 0.5307119551301003,
+    "last": 0.5798146724700928
+  },
+  "Episode_Metrics/max_abs_hip_x": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.3191654008626938,
+    "previous100": 0.24825815241783858,
+    "last100": 0.24855826810002327,
+    "last": 0.4805181324481964
+  },
+  "Curriculum/terrain_levels/mean": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 1.06265625,
+    "previous100": 1.0993750011920929,
+    "last100": 0.9513541680574417,
+    "last": 0.625
+  },
+  "Curriculum/terrain_levels/max": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 4.18,
+    "previous100": 4.545,
+    "last100": 4.28,
+    "last": 3.0
+  },
+  "Curriculum/terrain_levels/flat": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.8042307913303375,
+    "previous100": 0.7361538696289063,
+    "last100": 0.6194871976971627,
+    "last": 0.23076924681663513
+  },
+  "Curriculum/terrain_levels/random_rough": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 1.327500028014183,
+    "previous100": 1.2029167103767395,
+    "last100": 0.8708333587646484,
+    "last": 0.6666666865348816
+  },
+  "Curriculum/terrain_levels/low_wave": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 1.0885714733600615,
+    "previous100": 1.5964286363124847,
+    "last100": 1.7057143819332123,
+    "last": 1.2857143878936768
+  },
+  "Metrics/twist/error_vel_xy": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.12420590780675411,
+    "previous100": 0.10754918090533465,
+    "last100": 0.1106821995601058,
+    "last": 0.03944879025220871
+  },
+  "Metrics/twist/error_vel_yaw": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.14320421621203422,
+    "previous100": 0.14237410574860404,
+    "last100": 0.1436209924891591,
+    "last": 0.03609643876552582
+  },
+  "Episode_Termination/time_out": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 4.451666666865349,
+    "previous100": 1.1996666669845581,
+    "last100": 1.1316666668653488,
+    "last": 1.0
+  },
+  "Episode_Termination/out_of_terrain_bounds": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.0,
+    "previous100": 0.0,
+    "last100": 0.0,
+    "last": 0.0
+  },
+  "Episode_Termination/illegal_contact": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.05,
+    "previous100": 0.005,
+    "last100": 0.0,
+    "last": 0.0
+  },
+  "Episode_Termination/shank_illegal_contact": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.025,
+    "previous100": 0.012000000029802322,
+    "last100": 0.01,
+    "last": 0.0
+  },
+  "Episode_Termination/torso_illegal_contact": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.10333333343267441,
+    "previous100": 0.0633333334326744,
+    "last100": 0.02833333343267441,
+    "last": 0.0
+  },
+  "Episode_Termination/prolonged_foot_air_time": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 0.0,
+    "previous100": 0.0,
+    "last100": 0.0,
+    "last": 0.0
+  },
+  "Train/mean_reward": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 94.97767570495606,
+    "previous100": 98.71039306640625,
+    "last100": 100.88014190673829,
+    "last": 100.2054214477539
+  },
+  "Train/mean_episode_length": {
+    "first_step": 439,
+    "last_step": 2482,
+    "first100": 991.8500842285156,
+    "previous100": 985.6756018066407,
+    "last100": 997.5194866943359,
+    "last": 993.9099731445312
+  }
+}

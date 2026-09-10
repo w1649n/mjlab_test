@@ -288,21 +288,50 @@ class UniformVelocityCommand(CommandTerm):
 
     fwd_ids = env_ids[is_forward]
     if len(fwd_ids) > 0:
+      x_lower, x_upper = self.cfg.ranges.lin_vel_x
+      # A two-sided range describes distinct forward/backward safety
+      # envelopes.  Do not let abs() mirror the larger side across zero (for
+      # example, (-0.3, 0.5) must never create a -0.5 command).  One-sided
+      # ranges retain their historical meaning as a speed-magnitude range.
+      forward_max = (
+        x_upper if x_lower < 0.0 < x_upper else max(abs(x_lower), abs(x_upper))
+      )
+      forward_min = min(0.3, forward_max)
       self.vel_command_b[fwd_ids, 0] = (
-        self.vel_command_b[fwd_ids, 0].abs().clamp(min=0.3)
+        self.vel_command_b[fwd_ids, 0].abs().clamp(min=forward_min, max=forward_max)
       )
       self.vel_command_b[fwd_ids, 1] = 0.0
       self.vel_command_b[fwd_ids, 2] = 0.0
 
     bwd_ids = env_ids[is_backward]
     if len(bwd_ids) > 0:
+      x_lower, x_upper = self.cfg.ranges.lin_vel_x
+      backward_max = (
+        -x_lower if x_lower < 0.0 < x_upper else max(abs(x_lower), abs(x_upper))
+      )
+      backward_min = min(0.3, backward_max)
       self.vel_command_b[bwd_ids, 0] = (
-        -self.vel_command_b[bwd_ids, 0].abs().clamp(min=0.3)
+        -self.vel_command_b[bwd_ids, 0].abs().clamp(min=backward_min, max=backward_max)
       )
       self.vel_command_b[bwd_ids, 1] = 0.0
       self.vel_command_b[bwd_ids, 2] = 0.0
 
     self.vel_command_w[directional_ids] = self.vel_command_b[directional_ids]
+
+    if self.cfg.sample_single_axis_commands:
+      # Some residual-controller tasks deliberately begin from a pure-MPC
+      # envelope that has been certified one axis at a time. Keep their random
+      # training samples inside that tested envelope; manual play commands are
+      # intentionally unaffected so mixed-command fine-tuning remains possible.
+      is_general = is_non_standing & ~is_forward & ~is_backward
+      general_ids = env_ids[is_general]
+      if len(general_ids) > 0:
+        selected_axes = torch.randint(0, 3, (len(general_ids),), device=self.device)
+        keep = torch.nn.functional.one_hot(selected_axes, num_classes=3).bool()
+        self.vel_command_b[general_ids] *= keep
+        self.vel_command_w[general_ids] = self.vel_command_b[general_ids]
+        self.is_heading_env[general_ids] = False
+        self.is_world_env[general_ids] = False
 
   def reset(self, env_ids: torch.Tensor | slice | None) -> dict[str, float]:
     extras = super().reset(env_ids)
@@ -523,6 +552,13 @@ class UniformVelocityCommandCfg(CommandTermCfg):
   init_velocity_prob: float = 0.0
   """Probability that an env starts its episode already moving at its sampled
   planar command velocity. Applied on reset only."""
+  sample_single_axis_commands: bool = False
+  """Sample at most one of ``vx``, ``vy`` and ``wz`` in general-command envs.
+
+  Straight forward/backward buckets already use only ``vx``. Manual commands
+  remain unrestricted within ``ranges`` so a trained policy can later be
+  evaluated or fine-tuned with mixed commands.
+  """
 
   @dataclass
   class Ranges:

@@ -36,6 +36,16 @@ def g23_model(g23_entity: Entity) -> mujoco.MjModel:
   return g23_entity.spec.compile()
 
 
+@pytest.fixture(scope="module")
+def g23_rl_mpc_entity() -> Entity:
+  return Entity(g23_constants.get_g23_rl_mpc_robot_cfg())
+
+
+@pytest.fixture(scope="module")
+def g23_rl_mpc_model(g23_rl_mpc_entity: Entity) -> mujoco.MjModel:
+  return g23_rl_mpc_entity.spec.compile()
+
+
 def test_g23_entity_contract(g23_entity: Entity, g23_model: mujoco.MjModel) -> None:
   assert g23_entity.joint_names == _JOINT_NAMES
   assert g23_entity.actuator_names == _JOINT_NAMES
@@ -100,3 +110,35 @@ def test_g23_all_collision_geoms_enabled(g23_model: mujoco.MjModel) -> None:
   for geom in collision_geoms:
     assert geom.contype == 1, f"{geom.name} lost its contype"
     assert geom.conaffinity == 1, f"{geom.name} lost its conaffinity"
+
+
+def test_g23_rl_mpc_uses_torque_actuators(
+  g23_rl_mpc_entity: Entity, g23_rl_mpc_model: mujoco.MjModel
+) -> None:
+  assert g23_rl_mpc_entity.joint_names == _JOINT_NAMES
+  assert g23_rl_mpc_entity.actuator_names == _JOINT_NAMES
+  assert g23_rl_mpc_model.nu == 12
+
+  for joint_name in _JOINT_NAMES:
+    actuator = g23_rl_mpc_model.actuator(joint_name)
+    assert actuator.trntype == mujoco.mjtTrn.mjTRN_JOINT
+    expected_limit = 36.0 if "Knee" in joint_name else 24.0
+    np.testing.assert_allclose(
+      actuator.ctrlrange,
+      (-expected_limit, expected_limit),
+      rtol=0.0,
+      atol=1e-6,
+    )
+
+
+def test_g23_rl_mpc_initial_stance(g23_rl_mpc_model: mujoco.MjModel) -> None:
+  key = g23_rl_mpc_model.key("init_state")
+  for joint_name in _JOINT_NAMES:
+    expected = 0.0
+    if "HipY" in joint_name:
+      expected = -0.8
+    elif "Knee" in joint_name:
+      expected = 1.6
+    assert key.qpos[g23_rl_mpc_model.joint(joint_name).qposadr[0]] == pytest.approx(
+      expected
+    )

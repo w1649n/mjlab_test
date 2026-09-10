@@ -1,0 +1,290 @@
+[
+  {
+    "variant": "pure_mpc",
+    "checkpoint": "/home/robotserver3/robert/mjlab_test/logs/rsl_rl/g23_rl_mpc_foot_state_history_v3/2026-09-10_11-11-39/model_2400.pt",
+    "command": [
+      0.2,
+      0.0,
+      0.0
+    ],
+    "tracking_mae": [
+      0.020096677601337435,
+      0.008776061267126352,
+      0.07006649142131209
+    ],
+    "touchdown_samples": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "mean_touchdown_x_body_m": [
+      0.21402161568403244,
+      0.2223869152367115,
+      -0.1529185175895691,
+      -0.1529073566198349
+    ],
+    "rear_touchdown_x_difference_m": 1.1160969734191895e-05,
+    "mean_touchdown_residual_x_m": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "stop_diagonal_launches": [
+      [
+        0,
+        3
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    "stop_pose_rmse_rad": 0.041157327687606195,
+    "stop_tail_modes": [
+      2
+    ],
+    "terminated": false
+  },
+  {
+    "variant": "new_policy_controller",
+    "checkpoint": "/home/robotserver3/robert/mjlab_test/logs/rsl_rl/g23_rl_mpc_foot_state_history_v3/2026-09-10_11-11-39/model_2400.pt",
+    "command": [
+      0.2,
+      0.0,
+      0.0
+    ],
+    "tracking_mae": [
+      0.02798302942514421,
+      0.025335544105182635,
+      0.07014337210333906
+    ],
+    "touchdown_samples": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "mean_touchdown_x_body_m": [
+      0.23731769248843193,
+      0.24473531916737556,
+      -0.1467541642487049,
+      -0.1503792367875576
+    ],
+    "rear_touchdown_x_difference_m": -0.0036250725388526917,
+    "mean_touchdown_residual_x_m": [
+      0.02790084038861096,
+      0.02790084038861096,
+      0.012255496520083398,
+      0.012255496520083398
+    ],
+    "stop_diagonal_launches": [
+      [
+        0,
+        3
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    "stop_pose_rmse_rad": 0.039052735270485625,
+    "stop_tail_modes": [
+      2
+    ],
+    "terminated": false
+  },
+  {
+    "variant": "pure_mpc",
+    "checkpoint": "/home/robotserver3/robert/mjlab_test/logs/rsl_rl/g23_rl_mpc_foot_state_history_v3/2026-09-10_11-11-39/model_2400.pt",
+    "command": [
+      0.0,
+      0.1,
+      0.0
+    ],
+    "tracking_mae": [
+      0.020354930576868355,
+      0.014503611609339715,
+      0.07860411416739226
+    ],
+    "touchdown_samples": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "mean_touchdown_x_body_m": [
+      0.19433514773845673,
+      0.20007369294762611,
+      -0.17541082203388214,
+      -0.18149447068572044
+    ],
+    "rear_touchdown_x_difference_m": -0.006083648651838303,
+    "mean_touchdown_residual_x_m": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "stop_diagonal_launches": [
+      [
+        0,
+        3
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    "stop_pose_rmse_rad": 0.03848219575526562,
+    "stop_tail_modes": [
+      2
+    ],
+    "terminated": false
+  },
+  {
+    "variant": "new_policy_controller",
+    "checkpoint": "/home/robotserver3/robert/mjlab_test/logs/rsl_rl/g23_rl_mpc_foot_state_history_v3/2026-09-10_11-11-39/model_2400.pt",
+    "command": [
+      0.0,
+      0.1,
+      0.0
+    ],
+    "tracking_mae": [
+      0.017161657919641585,
+      0.018941102698445355,
+      0.08346140613779425
+    ],
+    "touchdown_samples": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "mean_touchdown_x_body_m": [
+      0.20406976342201233,
+      0.21351227164268494,
+      -0.17366527765989304,
+      -0.18960051983594894
+    ],
+    "rear_touchdown_x_difference_m": -0.015935242176055908,
+    "mean_touchdown_residual_x_m": [
+      0.014999999664723873,
+      0.014999999664723873,
+      0.002699698554351926,
+      -0.002300301566720009
+    ],
+    "stop_diagonal_launches": [
+      [
+        0,
+        3
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    "stop_pose_rmse_rad": 0.03588901710992961,
+    "stop_tail_modes": [
+      2
+    ],
+    "terminated": false
+  },
+  {
+    "variant": "pure_mpc",
+    "checkpoint": "/home/robotserver3/robert/mjlab_test/logs/rsl_rl/g23_rl_mpc_foot_state_history_v3/2026-09-10_11-11-39/model_2400.pt",
+    "command": [
+      0.0,
+      0.0,
+      0.3
+    ],
+    "tracking_mae": [
+      0.014746493275742978,
+      0.01187145934556611,
+      0.08586112201213839
+    ],
+    "touchdown_samples": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "mean_touchdown_x_body_m": [
+      0.19126974791288376,
+      0.20139750838279724,
+      -0.18612373992800713,
+      -0.1738962046802044
+    ],
+    "rear_touchdown_x_difference_m": 0.012227535247802734,
+    "mean_touchdown_residual_x_m": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "stop_diagonal_launches": [
+      [
+        0,
+        3
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    "stop_pose_rmse_rad": 0.03606836322176679,
+    "stop_tail_modes": [
+      2
+    ],
+    "terminated": false
+  },
+  {
+    "variant": "new_policy_controller",
+    "checkpoint": "/home/robotserver3/robert/mjlab_test/logs/rsl_rl/g23_rl_mpc_foot_state_history_v3/2026-09-10_11-11-39/model_2400.pt",
+    "command": [
+      0.0,
+      0.0,
+      0.3
+    ],
+    "tracking_mae": [
+      0.010489900808315723,
+      0.017831833828240634,
+      0.08914206194877627
+    ],
+    "touchdown_samples": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "mean_touchdown_x_body_m": [
+      0.20577752962708473,
+      0.21369342878460884,
+      -0.19886262714862823,
+      -0.17919433116912842
+    ],
+    "rear_touchdown_x_difference_m": 0.019668295979499817,
+    "mean_touchdown_residual_x_m": [
+      0.014999999664723873,
+      0.014999999664723873,
+      -0.00985104963183403,
+      -0.004851049743592739
+    ],
+    "stop_diagonal_launches": [
+      [
+        0,
+        3
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    "stop_pose_rmse_rad": 0.024747090249030785,
+    "stop_tail_modes": [
+      2
+    ],
+    "terminated": false
+  }
+]
