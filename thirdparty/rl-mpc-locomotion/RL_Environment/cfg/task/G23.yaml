@@ -1,0 +1,127 @@
+# used to create the object
+name: G23
+
+physics_engine: ${..physics_engine}
+
+env:
+  numEnvs: ${resolve_default:32,${...num_envs}}
+  envSpacing: 2.  # [m]
+
+  clipObservations: 5.0
+  clipActions: 1.0
+
+  plane:
+    staticFriction: 1.0  # [-]
+    dynamicFriction: 1.0  # [-]
+    restitution: 0.0      # [-]
+
+  baseInitState:
+    pos: [0.0, 0.0, 0.32] # x,y,z [m]
+    rot: [0.0, 0.0, 0.0, 1.0] # x,y,z,w [quat]
+    vLinear: [0.0, 0.0, 0.0]  # x,y,z [m/s]
+    vAngular: [0.0, 0.0, 0.0] # x,y,z [rad/s]
+
+  bodyHeight: 0.28 # MPC target body height [m]
+
+  # In-process MPC used while collecting PPO rollouts: native or syncai.
+  mpcBackend: native
+
+  # MPC updates every 2 * 0.01 s = 0.02 s (50 Hz).
+  mpcIterationsBetween: 2
+  # Independent full trot cycle; stance and swing each last 0.25 s.
+  gaitPeriod_s: 0.5
+
+  # RLMPC action mapping for jeff_ros2_wbc.
+  # actions [-1, 1] -> q_weights[0:12] = actions * mpcParamScale + mpcParamConst
+  # q_weights[12] is the MPC gravity placeholder and remains 0.0 in deployment.
+  mpcParamScale: [50.0, 50.0, 35.0,
+                  1.0, 1.0, 12.0,
+                  0.15, 0.15, 0.5,
+                  0.2, 0.2, 0.25]
+  mpcParamConst: [100.0, 100.0, 70.0,
+                  1.0, 1.0, 25.0,
+                  0.25, 0.25, 0.75,
+                  0.3, 0.3, 0.5]
+
+  randomCommandVelocityRanges:
+    linear_x: [-1.0, 1.0] # min max [m/s]
+    linear_y: [-0.5, 0.5] # min max [m/s]
+    yaw: [-1.5, 1.5]      # min max [rad/s]
+
+  control:
+    # PD Drive parameters for non-MPC fallback control.
+    stiffness: 30.0   # [N*m/rad]
+    damping: 1.0      # [N*m*s/rad]
+    actionScale: 0.25
+
+  defaultJointAngles:  # target angles when action = 0.0
+    FL_HipX_joint: 0.0
+    FL_HipY_joint: -0.8
+    FL_Knee_joint: 1.6
+
+    FR_HipX_joint: 0.0
+    FR_HipY_joint: -0.8
+    FR_Knee_joint: 1.6
+
+    HL_HipX_joint: 0.0
+    HL_HipY_joint: -0.8
+    HL_Knee_joint: 1.6
+
+    HR_HipX_joint: 0.0
+    HR_HipY_joint: -0.8
+    HR_Knee_joint: 1.6
+
+  urdfAsset:
+    collapseFixedJoints: False
+    flipVisualAttachments: False
+    fixBaseLink: False
+    defaultDofDriveMode: 4 # see GymDofDriveModeFlags (0 none, 1 pos, 2 vel, 4 effort)
+
+  learn:
+    # rewards
+    linearVelocityXYRewardScale: 1.0
+    angularVelocityZRewardScale: 0.5
+    torqueRewardScale: -0.000025
+    linearVelocityZRewardScale: -4.0
+    angularVelocityXYRewardScale: -0.05
+    kneeCollisionRewardScale: 0.0
+
+    # normalization
+    linearVelocityScale: 1.0
+    angularVelocityScale: 1.0
+    dofPositionScale: 1.0
+    dofVelocityScale: 1.0
+
+    # episode length in seconds
+    episodeLength_s: 20
+
+  viewer:
+    refEnv: 0
+    pos: [0, -2, 1.0]     # [m]
+    lookat: [0.0, 0.0, 0.3] # [m]
+
+  enableCameraSensors: False
+
+sim:
+  dt: 0.01
+  substeps: 2
+  up_axis: "z"
+  use_gpu_pipeline: ${eq:${...pipeline},"gpu"}
+  gravity: [0.0, 0.0, -9.81]
+  physx:
+    num_threads: ${....num_threads}
+    solver_type: ${....solver_type}
+    use_gpu: ${contains:"cuda",${....sim_device}}
+    num_position_iterations: 4
+    num_velocity_iterations: 1
+    contact_offset: 0.02
+    rest_offset: 0.0
+    bounce_threshold_velocity: 0.2
+    max_depenetration_velocity: 100.0
+    default_buffer_size_multiplier: 5.0
+    max_gpu_contact_pairs: 8388608
+    num_subscenes: ${....num_subscenes}
+    contact_collection: 1
+
+task:
+  randomize: False

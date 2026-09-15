@@ -136,6 +136,7 @@ torch = [
 src = ["src"]  # Helpful for recognizing first-party imports.
 indent-width = 2
 exclude = [
+  "thirdparty",
   "src/mjlab/utils/lab_api",
   "typings",
 ]
@@ -148,7 +149,7 @@ ignore = ["B011"]
 pythonVersion = "3.10"
 venvPath = "."
 venv = ".venv"
-ignore = ["./typings", "./src/mjlab/utils/lab_api", "./docs"]
+ignore = ["./typings", "./src/mjlab/utils/lab_api", "./docs", "./thirdparty"]
 stubPath = "typings"
 
 [tool.ty.environment]

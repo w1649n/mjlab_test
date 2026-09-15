@@ -65,17 +65,22 @@ pre-training gate.
 
 ## Native solver for the mjlab interpreter
 
-The old CPython 3.8 extension can remain in the controller checkout. Build an
-additional extension for mjlab's active Python (currently CPython 3.13):
+The controller is bundled in `thirdparty/rl-mpc-locomotion` at the mjlab
+repository root. It uses `RobotRunnerMin` / `ConvexMPCLocomotion`, with the
+`syncai` formulation and qpOASES solver through the `mpc_osqp` C++ extension.
+Build the extension for mjlab's active Python (currently CPython 3.13):
 
 ```bash
 uv run python scripts/build_rl_mpc_solver.py
 ```
 
 The helper uses a modern installed `pybind11`, or the headers vendored by
-PyTorch, without replacing the old binary. If the controller checkout is not
-adjacent to `mjlab_test`, set `MJLAB_RLMPC_CONTROLLER_ROOT` or pass
-`--controller-root` to the build helper.
+PyTorch. Runtime and build commands default to the bundled source; no sibling
+checkout is required. To use a different source, set
+`MJLAB_RLMPC_CONTROLLER_ROOT` for both commands, or pass `--controller-root`
+to the build helper and set `LegacyMpcBackendCfg.controller_root` at runtime.
+Rebuild after changing native sources or Python versions. This bundled source
+is for repository-based use; it is not included in the mjlab wheel.
 
 ## Required pre-training gate
 

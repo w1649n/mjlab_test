@@ -13,7 +13,10 @@ from pathlib import Path
 
 
 def _default_controller_root() -> Path:
-  return Path(__file__).resolve().parents[2] / "rl-mpc-locomotion"
+  override = os.environ.get("MJLAB_RLMPC_CONTROLLER_ROOT")
+  if override:
+    return Path(override).expanduser().resolve()
+  return Path(__file__).resolve().parents[1] / "thirdparty" / "rl-mpc-locomotion"
 
 
 def _find_modern_pybind11_include() -> Path:
@@ -83,7 +86,7 @@ def main() -> None:
     "--controller-root",
     type=Path,
     default=_default_controller_root(),
-    help="Path to the rl-mpc-locomotion checkout.",
+    help="Controller source path (default: bundled thirdparty copy or env override).",
   )
   args = parser.parse_args()
   solver = build_solver(args.controller_root)

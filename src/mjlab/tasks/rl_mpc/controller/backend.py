@@ -1,4 +1,4 @@
-"""Lazy adapter for the external rl-mpc-locomotion controller.
+"""Lazy adapter for the vendored rl-mpc-locomotion controller.
 
 The task registry must remain importable when the optional native solver is not
 built.  External imports therefore happen only when an environment constructs
@@ -97,19 +97,17 @@ class LegacyMpcBackendCfg:
   stop_reposition_steps: int = 0
 
 
-def _development_controller_root() -> Path | None:
-  """Find the adjacent controller checkout used by this development workspace."""
+def _vendored_controller_root() -> Path | None:
+  """Find the controller bundled in this checkout, regardless of its name."""
   for parent in Path(__file__).resolve().parents:
-    if parent.name == "mjlab_test":
-      candidate = parent.parent / "rl-mpc-locomotion"
-      if (candidate / "MPC_Controller").is_dir():
-        return candidate
-      break
+    candidate = parent / "thirdparty" / "rl-mpc-locomotion"
+    if (candidate / "MPC_Controller").is_dir():
+      return candidate
   return None
 
 
 def resolve_controller_root(explicit_root: str | None = None) -> Path | None:
-  """Resolve an external controller checkout, or return None for an installed one."""
+  """Prefer explicit overrides, then vendored sources, then an installed package."""
   raw_root = explicit_root or os.environ.get(CONTROLLER_ROOT_ENV)
   if raw_root:
     root = Path(raw_root).expanduser().resolve()
@@ -117,12 +115,16 @@ def resolve_controller_root(explicit_root: str | None = None) -> Path | None:
       raise FileNotFoundError(f"No MPC_Controller package under {root}")
     return root
 
+  vendored_root = _vendored_controller_root()
+  if vendored_root is not None:
+    return vendored_root
+
   try:
     if importlib.util.find_spec("MPC_Controller") is not None:
       return None
   except (ImportError, ValueError):
     pass
-  return _development_controller_root()
+  return None
 
 
 def _load_external_modules(cfg: LegacyMpcBackendCfg):

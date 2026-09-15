@@ -1,0 +1,31 @@
+ M MPC_Controller/Parameters.py
+ M MPC_Controller/common/FootSwingTrajectory.py
+ M MPC_Controller/common/LegController.py
+ M MPC_Controller/common/Quadruped.py
+ M MPC_Controller/common/StateEstimator.py
+ M MPC_Controller/convex_MPC/ConvexMPCLocomotion.py
+ M MPC_Controller/convex_MPC/Gait.py
+ M MPC_Controller/convex_MPC/mpc_osqp.cc
+ M MPC_Controller/robot_runner/RobotRunnerMin.py
+ M README.md
+ M RL_Environment/WeightPolicy.py
+ M RL_Environment/sim_utils.py
+ M RL_Environment/tasks/__init__.py
+ M RL_Environment/tasks/a1.py
+ M RL_Environment/tasks/aliengo.py
+ M RL_Environment/tasks/go1.py
+ M RL_Environment/train.py
+ M RL_MPC_Locomotion.py
+ M setup.py
+?? RL_Environment/cfg/task/G23.yaml
+?? RL_Environment/jeff_wbc_weight_node.py
+?? RL_Environment/syncai_controller.py
+?? RL_Environment/tasks/g23.py
+?? RL_Environment/udp_mpc_bridge.py
+?? RL_Environment/web_control.py
+?? assets/g23_description/
+?? debug_jsonl/
+?? exports/
+?? run_simulation.sh
+?? tools/
+?? train_syncai.sh

@@ -24,6 +24,10 @@ Added
 Changed
 ^^^^^^^
 
+- Bundled the G23 RL-MPC controller and native solver sources in
+  ``thirdparty/rl-mpc-locomotion`` and made runtime loading and solver builds
+  prefer this copy over the adjacent development checkout.
+
 - Made G23 RLMPC home-step order continue from the last walking diagonal,
   including zero-swing exchange ticks, instead of always starting FL/HR.
 

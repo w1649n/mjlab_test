@@ -18,3 +18,9 @@ benchmark_results/
 # Documentation outputs.
 **/_build/*
 **/generated/*
+
+# Vendored MPC native build products.
+thirdparty/**/build/
+thirdparty/**/*.egg-info/
+thirdparty/**/*.so
+thirdparty/**/*.o
