@@ -1,0 +1,65 @@
+[
+  {
+    "parameter": "env.scene.terrain.terrain_generator.sub_terrains.flat.size",
+    "saved_run": [
+      "8.0",
+      "8.0"
+    ],
+    "current_default": [
+      "10.0",
+      "10.0"
+    ]
+  },
+  {
+    "parameter": "env.scene.terrain.terrain_generator.sub_terrains.low_wave.size",
+    "saved_run": [
+      "8.0",
+      "8.0"
+    ],
+    "current_default": [
+      "10.0",
+      "10.0"
+    ]
+  },
+  {
+    "parameter": "env.scene.terrain.terrain_generator.sub_terrains.random_rough.size",
+    "saved_run": [
+      "8.0",
+      "8.0"
+    ],
+    "current_default": [
+      "10.0",
+      "10.0"
+    ]
+  },
+  {
+    "parameter": "env.scene.terrain.num_envs",
+    "saved_run": "32",
+    "current_default": "1"
+  },
+  {
+    "parameter": "env.scene.num_envs",
+    "saved_run": "32",
+    "current_default": "1"
+  },
+  {
+    "parameter": "env.seed",
+    "saved_run": "42",
+    "current_default": "null"
+  },
+  {
+    "parameter": "agent.load_checkpoint",
+    "saved_run": "\\Amodel_400\\.pt\\Z",
+    "current_default": "model_.*.pt"
+  },
+  {
+    "parameter": "agent.resume",
+    "saved_run": "true",
+    "current_default": "false"
+  },
+  {
+    "parameter": "agent.load_run",
+    "saved_run": "\\A2026\\-09\\-10_10\\-51\\-22\\Z",
+    "current_default": ".*"
+  }
+]

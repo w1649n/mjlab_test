@@ -608,6 +608,52 @@ def syncai_g23_rough_proprio_history6_env_cfg(
   return cfg
 
 
+def syncai_g23_flat_stand_history6_env_cfg(
+  play: bool = False,
+) -> ManagerBasedRlEnvCfg:
+  """Fine-tune stopping in the default stance, retaining checkpoint observations."""
+  cfg = syncai_g23_rough_proprio_history6_env_cfg(play=play)
+  assert cfg.scene.terrain is not None
+  cfg.scene.terrain.terrain_type = "plane"
+  cfg.scene.terrain.terrain_generator = None
+  # Keep the rough-task sensors and critic terms for checkpoint compatibility.
+  cfg.curriculum = {}
+  cfg.events.pop("randomize_terrain", None)
+  cfg.events.pop("push_robot", None)
+  cfg.terminations.pop("out_of_terrain_bounds", None)
+
+  twist = cfg.commands["twist"]
+  assert isinstance(twist, UniformVelocityCommandCfg)
+  twist.rel_standing_envs = 1.0 if play else 0.7
+  twist.heading_command = False
+  twist.ranges.heading = None
+  twist.rel_heading_envs = 0.0
+  twist.rel_world_envs = 0.0
+  twist.rel_forward_envs = 0.0
+  twist.rel_backward_envs = 0.0
+  twist.init_velocity_prob = 0.0
+  twist.ranges.lin_vel_x = (-0.4, 0.4)
+  twist.ranges.lin_vel_y = (-0.2, 0.2)
+  twist.ranges.ang_vel_z = (-0.3, 0.3)
+  twist.resampling_time_range = (4.0, 8.0)
+
+  cfg.rewards["standing_joint_deviation"] = RewardTermCfg(
+    func=mdp.standing_joint_deviation_l2,
+    weight=-3.0,
+    params={"command_name": "twist"},
+  )
+  cfg.rewards["standing_joint_velocity"] = RewardTermCfg(
+    func=mdp.standing_joint_velocity_l2,
+    weight=-0.05,
+    params={"command_name": "twist"},
+  )
+  cfg.rewards["standing_missing_foot_contacts"].weight = -2.0
+  # Include zero commands in the existing foot-slip cost.
+  cfg.rewards["foot_slip"].params["command_threshold"] = -1.0
+  cfg.rewards["body_ang_vel"].weight = -0.1
+  return cfg
+
+
 def syncai_g23_flat_proprio_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   """Create SyncAI G23 flat terrain config with compact proprioception."""
   cfg = syncai_g23_flat_env_cfg(play=play)

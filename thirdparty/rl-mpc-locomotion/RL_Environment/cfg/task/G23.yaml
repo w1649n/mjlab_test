@@ -21,7 +21,7 @@ env:
     vLinear: [0.0, 0.0, 0.0]  # x,y,z [m/s]
     vAngular: [0.0, 0.0, 0.0] # x,y,z [rad/s]
 
-  bodyHeight: 0.28 # MPC target body height [m]
+  bodyHeight: 0.32 # MPC target body height [m]
 
   # In-process MPC used while collecting PPO rollouts: native or syncai.
   mpcBackend: native

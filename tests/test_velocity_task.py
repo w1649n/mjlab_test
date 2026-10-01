@@ -1,5 +1,7 @@
 """Tests specific to velocity tasks."""
 
+from dataclasses import asdict
+
 import pytest
 
 from mjlab.asset_zoo.robots import G1_ACTION_SCALE, G23_ACTION_SCALE, GO1_ACTION_SCALE
@@ -8,6 +10,21 @@ from mjlab.tasks.registry import list_tasks, load_env_cfg
 from mjlab.tasks.velocity import mdp
 from mjlab.tasks.velocity.config.g23.rl_cfg import syncai_g23_ppo_runner_cfg
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
+
+
+def test_g23_stand_preserves_history6_observations_and_zero_command_play():
+  original = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6")
+  task = "Mjlab-Velocity-Flat-SyncAI-G23-Proprio-History6-Stand"
+  cfg = load_env_cfg(task)
+  assert asdict(cfg.observations["actor"]) == asdict(original.observations["actor"])
+  assert asdict(cfg.observations["critic"]) == asdict(original.observations["critic"])
+  assert cfg.curriculum == {}
+  assert "push_robot" not in cfg.events
+  assert cfg.commands["twist"].rel_standing_envs == 0.7
+  play_cfg = load_env_cfg(task, play=True)
+  assert play_cfg.commands["twist"].rel_standing_envs == 1.0
+  assert not play_cfg.commands["twist"].heading_command
+  assert "randomize_terrain" not in play_cfg.events
 
 
 @pytest.fixture(scope="module")

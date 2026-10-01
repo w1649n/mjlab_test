@@ -24,6 +24,9 @@ Added
 Changed
 ^^^^^^^
 
+- Set the bundled G23 MPC target body height to 0.32 m and fixed swing
+  clearance to 0.06 m for walking and stopping steps.
+
 - Bundled the G23 RL-MPC controller and native solver sources in
   ``thirdparty/rl-mpc-locomotion`` and made runtime loading and solver builds
   prefer this copy over the adjacent development checkout.

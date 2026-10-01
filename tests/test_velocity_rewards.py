@@ -17,12 +17,39 @@ from mjlab.tasks.velocity.mdp.rewards import (
   feet_contact_count_standing,
   feet_excessive_air_time,
   feet_swing_height,
+  standing_joint_deviation_l2,
+  standing_joint_velocity_l2,
   track_angular_velocity_yaw,
   track_linear_velocity_xy,
   upright,
   vertical_velocity_l2,
 )
 from mjlab.utils.lab_api.math import quat_from_euler_xyz
+
+
+@pytest.mark.parametrize(
+  "reward", [standing_joint_deviation_l2, standing_joint_velocity_l2]
+)
+def test_standing_joint_costs_gate_translation_and_rotation(reward):
+  data = SimpleNamespace(
+    joint_pos=torch.tensor([[0.4, -0.65, 1.3]]).repeat(4, 1),
+    default_joint_pos=torch.tensor([[0.0, -0.65, 1.3]]).repeat(4, 1),
+    joint_vel=torch.tensor([[0.4, 0.0, 0.0]]).repeat(4, 1),
+  )
+  env = SimpleNamespace(
+    scene={"robot": SimpleNamespace(data=data)},
+    command_manager=SimpleNamespace(
+      get_command=lambda _: torch.tensor(
+        [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.0, 0.1], [0.0, 0.05, 0.0]]
+      )
+    ),
+  )
+  torch.testing.assert_close(reward(env, "twist"), torch.tensor([0.16, 0.0, 0.0, 0.16]))
+  # Unselected joints must not contribute; resting at the nonzero default is free.
+  torch.testing.assert_close(
+    reward(env, "twist", asset_cfg=SceneEntityCfg("robot", joint_ids=[1, 2])),
+    torch.zeros(4),
+  )
 
 
 def _identity_quat(B: int) -> torch.Tensor:

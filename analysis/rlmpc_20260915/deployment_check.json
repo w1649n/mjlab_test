@@ -1,0 +1,9 @@
+{
+  "checkpoint": "logs/rsl_rl/g23_rl_mpc_foot_state_history_v3/2026-09-10_11-11-39/model_5399.pt",
+  "sha256": "f36090fb80d68e0aebc56ba4a82eb797f1365e532fb942682868c9cf2b4e980e",
+  "deployed_onnx": "../quadruped_robot_simulation/policy/mpc/mjlab_foot_state_history_v3.onnx",
+  "onnx_sha256": "b549099c20f32cc26c195d4776bfa0c04a66566a52bdf2c5cbb68d9b55db9394",
+  "metadata_matches_checkpoint": true,
+  "normalizer_sample_parity_max_absolute_error": 2.980232238769531e-07,
+  "samples": 20
+}

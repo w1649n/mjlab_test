@@ -126,9 +126,9 @@ def syncai_g23_rl_mpc_env_cfg(
   # maximum 8 cm terrain. Stage one samples one command axis at a time so the
   # residual policy first learns a stable foothold baseline; mixed-command
   # fine-tuning can follow a stable checkpoint and a separate combined gate.
-  twist.ranges.lin_vel_x = (-0.2, 0.5)
-  twist.ranges.lin_vel_y = (-0.15, 0.15)
-  twist.ranges.ang_vel_z = (-0.5, 0.5)
+  twist.ranges.lin_vel_x = (-0.8, 0.8)
+  twist.ranges.lin_vel_y = (-0.6, 0.6)
+  twist.ranges.ang_vel_z = (-1.5, 1.5)
   twist.sample_single_axis_commands = True
   # Jointly train quiet four-leg standing and locomotion under one policy.
   # This gives the hybrid controller enough zero-command transitions without

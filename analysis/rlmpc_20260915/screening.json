@@ -1,0 +1,3852 @@
+[
+  {
+    "model": "pure_mpc",
+    "checkpoint_sha256": null,
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0.2,
+      0,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.024842023849487305
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.020096677601337435,
+            0.008776061267126352,
+            0.07006649142131209
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.2254149729105661
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0016006202111020684,
+            0.0007600800173046689,
+            0.003623189211357385
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.041649446200940125
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "pure_mpc",
+    "checkpoint_sha256": null,
+    "level": 0,
+    "seed": 42,
+    "command": [
+      -0.2,
+      0,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.04922817781567582,
+            0.0387527185480576,
+            0.08757475214079022
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.24312364317481205
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.001498138924750189,
+            1.2548285485157369e-05,
+            0.0028293771323903154
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.025164774073492595
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "pure_mpc",
+    "checkpoint_sha256": null,
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0.1,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.020354930576868355,
+            0.014503611609339715,
+            0.07860411416739226
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.22748450234708723
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          0.08
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0015797124182184536,
+            0.0006788852213261028,
+            0.0035592864628415555
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.03890651391841813
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "pure_mpc",
+    "checkpoint_sha256": null,
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      -0.1,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.01777152100854437,
+            0.03167094405740505,
+            0.0817886496335268
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.2323525960911301
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.001550776188572248,
+            0.0005644683233307054,
+            0.003600313028631111
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.03760294732519149
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "pure_mpc",
+    "checkpoint_sha256": null,
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0,
+      0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.014746493275742978,
+            0.01187145934556611,
+            0.08586112201213839
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.22713982543933658
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          0.08
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0017202680930495263,
+            0.0009997563622891903,
+            0.003431158454235022
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.03659812927768293
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "pure_mpc",
+    "checkpoint_sha256": null,
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0,
+      -0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.012278356520400848,
+            0.009634800069616176,
+            0.09075791352987285
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.24147937146923246
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0018007591444378099,
+            0.00034630999124298493,
+            0.003590044874775534
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.04024695046352356
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "pure_mpc",
+    "checkpoint_sha256": null,
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0.2,
+      0,
+      0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.025086164474487305
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.02071602350473405,
+            0.005062200343236328,
+            0.08190947848558423
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.22242493037151692
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0017530404962599277,
+            0.0010495745033646624,
+            0.003327246623133154
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.03850723404026457
+        ],
+        "clip_fraction": [
+          0.0
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "700",
+    "checkpoint_sha256": "9db77e79dd298ee81078a4c6ad18d53f618df87e4ecee337f63b0132d5c714b0",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0.2,
+      0,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.024842023849487305
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.02132272079586983,
+            0.00981241038402004,
+            0.0712190058879787
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.20743319122243503
+        ],
+        "clip_fraction": [
+          0.35125
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0016519348680352171,
+            0.001066203733595709,
+            0.003908832067390904
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.049025728639507535
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "700",
+    "checkpoint_sha256": "9db77e79dd298ee81078a4c6ad18d53f618df87e4ecee337f63b0132d5c714b0",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      -0.2,
+      0,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.0202617832124233,
+            0.015171334477781784,
+            0.09134530253708363
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.21653720295762363
+        ],
+        "clip_fraction": [
+          0.24375
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0015538332285359503,
+            0.0001541908896372964,
+            0.003413480678573251
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.029544504343216565
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "700",
+    "checkpoint_sha256": "9db77e79dd298ee81078a4c6ad18d53f618df87e4ecee337f63b0132d5c714b0",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0.1,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.017083757239361147,
+            0.019411102309823073,
+            0.08283106576651335
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.2156563524767662
+        ],
+        "clip_fraction": [
+          0.34625
+        ],
+        "four_contact_fraction": [
+          0.08
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0015867869323119522,
+            0.0006999274839957555,
+            0.0033197515578164407
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.03919779274178803
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "700",
+    "checkpoint_sha256": "9db77e79dd298ee81078a4c6ad18d53f618df87e4ecee337f63b0132d5c714b0",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      -0.1,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.02588928968529217,
+            0.037147870250046316,
+            0.08230347208678722
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.21383675272697586
+        ],
+        "clip_fraction": [
+          0.215
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0015466638607904315,
+            5.162864191030773e-05,
+            0.002762607734572763
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.02810178441238082
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "700",
+    "checkpoint_sha256": "9db77e79dd298ee81078a4c6ad18d53f618df87e4ecee337f63b0132d5c714b0",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0,
+      0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.008617746141389944,
+            0.01621439466252923,
+            0.08600999981164933
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.2108859499414305
+        ],
+        "clip_fraction": [
+          0.235
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0017301415900389354,
+            0.0009727306726078193,
+            0.0033203498869746302
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.03644968502184015
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "700",
+    "checkpoint_sha256": "9db77e79dd298ee81078a4c6ad18d53f618df87e4ecee337f63b0132d5c714b0",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0,
+      -0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.023035049438476562
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.007721416319691343,
+            0.00889632007223554,
+            0.0915900091230869
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.20821650704280814
+        ],
+        "clip_fraction": [
+          0.325
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0016055448430900773,
+            0.0002830533093462388,
+            0.002963902684083829
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.029762612616030915
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "700",
+    "checkpoint_sha256": "9db77e79dd298ee81078a4c6ad18d53f618df87e4ecee337f63b0132d5c714b0",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0.2,
+      0,
+      0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.025086164474487305
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.018797399848699565,
+            0.007690864829346538,
+            0.0833912244737148
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.20803339416951624
+        ],
+        "clip_fraction": [
+          0.27625
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0017239677719771862,
+            0.0013906898101170857,
+            0.003922743869479745
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.046431098120520535
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "2400",
+    "checkpoint_sha256": "7cd9bdade9afa76482806022428f8da10139ad790beb5afb1f6d2ae611cf11ab",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0.2,
+      0,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.024842023849487305
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.02798302942514421,
+            0.025335544105182635,
+            0.07014337210333906
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.20034647998175562
+        ],
+        "clip_fraction": [
+          0.1725
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.001624555674691995,
+            0.0005356325581669807,
+            0.003196661206893623
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.03951096070521463
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "2400",
+    "checkpoint_sha256": "7cd9bdade9afa76482806022428f8da10139ad790beb5afb1f6d2ae611cf11ab",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      -0.2,
+      0,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.010521781027317045,
+            0.012261801106506027,
+            0.09242225980386137
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.21788886830555076
+        ],
+        "clip_fraction": [
+          0.15375
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0014597097660104435,
+            0.0009211311279796064,
+            0.0027038588134261467
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.015330162138153226
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "2400",
+    "checkpoint_sha256": "7cd9bdade9afa76482806022428f8da10139ad790beb5afb1f6d2ae611cf11ab",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0.1,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.017161657919641585,
+            0.018941102698445355,
+            0.08346140613779425
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.21788975235473032
+        ],
+        "clip_fraction": [
+          0.14625
+        ],
+        "four_contact_fraction": [
+          0.08
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0016425241933514675,
+            5.623243002048639e-06,
+            0.002463074562062199
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.036364714144525905
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "2400",
+    "checkpoint_sha256": "7cd9bdade9afa76482806022428f8da10139ad790beb5afb1f6d2ae611cf11ab",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      -0.1,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.024992845188826322,
+            0.03475591387599712,
+            0.08217441881075502
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.21516991473686878
+        ],
+        "clip_fraction": [
+          0.17
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0015485811947534482,
+            1.5759726136555703e-05,
+            0.002811534201803928
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.028353113589596687
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "2400",
+    "checkpoint_sha256": "7cd9bdade9afa76482806022428f8da10139ad790beb5afb1f6d2ae611cf11ab",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0,
+      0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.010489900808315723,
+            0.017831833828240634,
+            0.08914206194877627
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.21755834719168074
+        ],
+        "clip_fraction": [
+          0.12625
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0019886462374900777,
+            0.00016399411639819543,
+            0.0019555112321783478
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.025256672982010002
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "2400",
+    "checkpoint_sha256": "7cd9bdade9afa76482806022428f8da10139ad790beb5afb1f6d2ae611cf11ab",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0,
+      -0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.009832758493430446,
+            0.007353028059005737,
+            0.09238126644492146
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.21955580206580053
+        ],
+        "clip_fraction": [
+          0.2475
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.001712452609402438,
+            0.00014633018213013808,
+            0.0030958804732654243
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.039183950290547914
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "2400",
+    "checkpoint_sha256": "7cd9bdade9afa76482806022428f8da10139ad790beb5afb1f6d2ae611cf11ab",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0.2,
+      0,
+      0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.025086164474487305
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.021713491708040236,
+            0.010913892881944776,
+            0.08682002702355385
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.21627312610549235
+        ],
+        "clip_fraction": [
+          0.1375
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0019197308411821722,
+            0.0005015288681412736,
+            0.0020810406462987885
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.036889705430699374
+        ],
+        "clip_fraction": [
+          0.625
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "4000",
+    "checkpoint_sha256": "2bf322f7eca5c52738bc77f6cea8927e68f7790c7ea000d089158b7e64a032ff",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0.2,
+      0,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.024842023849487305
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.02197995004057884,
+            0.020491808119695632,
+            0.07069596854620613
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.20192993483312585
+        ],
+        "clip_fraction": [
+          0.2425
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0015898766384149592,
+            0.0005863653705455362,
+            0.0032874992610110593
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.0383090224413702
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "4000",
+    "checkpoint_sha256": "2bf322f7eca5c52738bc77f6cea8927e68f7790c7ea000d089158b7e64a032ff",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      -0.2,
+      0,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.03193922743201263,
+            0.03071361169568263,
+            0.08730616487096995
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.2222130084390655
+        ],
+        "clip_fraction": [
+          0.22
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0014951639405141274,
+            7.867134797076384e-05,
+            0.002985335026557247
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.02383088134368888
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "4000",
+    "checkpoint_sha256": "2bf322f7eca5c52738bc77f6cea8927e68f7790c7ea000d089158b7e64a032ff",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0.1,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.01844506658264436,
+            0.016310488030314454,
+            0.07904867006465793
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.20719163445920633
+        ],
+        "clip_fraction": [
+          0.24125
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0015591027836004893,
+            6.728970743097307e-06,
+            0.003045942747266963
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.02951086913923854
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "4000",
+    "checkpoint_sha256": "2bf322f7eca5c52738bc77f6cea8927e68f7790c7ea000d089158b7e64a032ff",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      -0.1,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.02284164908371167,
+            0.03572885174304252,
+            0.07858214167878032
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.22174435468713202
+        ],
+        "clip_fraction": [
+          0.25875
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0015756765706464648,
+            0.0005139404636186858,
+            0.0031330408982466907
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.03727451920000837
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "4000",
+    "checkpoint_sha256": "2bf322f7eca5c52738bc77f6cea8927e68f7790c7ea000d089158b7e64a032ff",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0,
+      0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.02133494584239088,
+            0.02568238536186982,
+            0.08450143545866014
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.20525743296091067
+        ],
+        "clip_fraction": [
+          0.2325
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0019456695190941294,
+            0.0001958804305953284,
+            0.0026362690705961237
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.029312539641446533
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "4000",
+    "checkpoint_sha256": "2bf322f7eca5c52738bc77f6cea8927e68f7790c7ea000d089158b7e64a032ff",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0,
+      -0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.016445616205455735,
+            0.018005778208607808,
+            0.0874914362430572
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.21470494695519043
+        ],
+        "clip_fraction": [
+          0.24375
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0017843517831837138,
+            0.00036714429734274745,
+            0.003811851405771449
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.041311202030789064
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "4000",
+    "checkpoint_sha256": "2bf322f7eca5c52738bc77f6cea8927e68f7790c7ea000d089158b7e64a032ff",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0.2,
+      0,
+      0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.025086164474487305
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.0201421118080616,
+            0.0069078767206519846,
+            0.08633616882562636
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.20912412087715088
+        ],
+        "clip_fraction": [
+          0.23875
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0019533597646902005,
+            0.0003908092761412263,
+            0.001803311081433397
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.03998380614391331
+        ],
+        "clip_fraction": [
+          0.5
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "5399",
+    "checkpoint_sha256": "f36090fb80d68e0aebc56ba4a82eb797f1365e532fb942682868c9cf2b4e980e",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0.2,
+      0,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.024842023849487305
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.03546620258688931,
+            0.04324993029484176,
+            0.08232027983060107
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.22046277090477104
+        ],
+        "clip_fraction": [
+          0.2475
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0015272276864076654,
+            0.0004089145657295982,
+            0.0023625566992753495
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.02277981324599867
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "5399",
+    "checkpoint_sha256": "f36090fb80d68e0aebc56ba4a82eb797f1365e532fb942682868c9cf2b4e980e",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      -0.2,
+      0,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.01306427541375161,
+            0.01405340594938025,
+            0.08749121073400602
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.21426462443106545
+        ],
+        "clip_fraction": [
+          0.305
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0014793493459001183,
+            0.0007309881271794439,
+            0.0025647794975278276
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.016977501877297935
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "5399",
+    "checkpoint_sha256": "f36090fb80d68e0aebc56ba4a82eb797f1365e532fb942682868c9cf2b4e980e",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0.1,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.010123892300762237,
+            0.008959638148546212,
+            0.08246733577921987
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.21550017111799574
+        ],
+        "clip_fraction": [
+          0.28
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0015987012504289548,
+            0.0006674373991942654,
+            0.0016165453013187896
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.032059480057930106
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "5399",
+    "checkpoint_sha256": "f36090fb80d68e0aebc56ba4a82eb797f1365e532fb942682868c9cf2b4e980e",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      -0.1,
+      0
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.030152045541908593,
+            0.04094440003857021,
+            0.0811275026574731
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.2158235234592391
+        ],
+        "clip_fraction": [
+          0.29
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0015099321662758788,
+            0.0005991429641532401,
+            0.0021730873768683523
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.022153953000266628
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "5399",
+    "checkpoint_sha256": "f36090fb80d68e0aebc56ba4a82eb797f1365e532fb942682868c9cf2b4e980e",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0,
+      0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.022827625274658203
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.008749208552762866,
+            0.015539136724546551,
+            0.08789784872531893
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.21322037869691354
+        ],
+        "clip_fraction": [
+          0.26
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.002137172824392716,
+            0.0013377575933312376,
+            0.0010844828669602671
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.03541204330885336
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "5399",
+    "checkpoint_sha256": "f36090fb80d68e0aebc56ba4a82eb797f1365e532fb942682868c9cf2b4e980e",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0,
+      0,
+      -0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.023161888122558594
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.013115236811572686,
+            0.017746065661776812,
+            0.09194823244214055
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.2205727048495787
+        ],
+        "clip_fraction": [
+          0.2975
+        ],
+        "four_contact_fraction": [
+          0.0
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.001551184185470144,
+            0.00048722845036536455,
+            0.002895754784500847
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.02697529218128672
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  },
+  {
+    "model": "5399",
+    "checkpoint_sha256": "f36090fb80d68e0aebc56ba4a82eb797f1365e532fb942682868c9cf2b4e980e",
+    "level": 0,
+    "seed": 42,
+    "command": [
+      0.2,
+      0,
+      0.3
+    ],
+    "terrain_types": [
+      0
+    ],
+    "failed": false,
+    "max_roll_pitch_rad": [
+      0.025086164474487305
+    ],
+    "solver_failure_count": [
+      0
+    ],
+    "phases": [
+      {
+        "phase": "stand",
+        "seconds": 2.0,
+        "tracking_mae": [
+          [
+            0.0007908041251357645,
+            0.0007064225769136102,
+            0.00015892974119196879
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.019263964358591155
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "walk",
+        "seconds": 4.0,
+        "tracking_mae": [
+          [
+            0.020786750614643083,
+            0.01451943795196712,
+            0.08402245047688484
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.20807214202801813
+        ],
+        "clip_fraction": [
+          0.24625
+        ],
+        "four_contact_fraction": [
+          0.04
+        ],
+        "stand_fraction": [
+          0.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      },
+      {
+        "phase": "stop",
+        "seconds": 3.0,
+        "tracking_mae": [
+          [
+            0.0020268513495102524,
+            0.000538356676697731,
+            0.0009148042323067784
+          ]
+        ],
+        "pose_rmse_rad": [
+          0.03405371359874105
+        ],
+        "clip_fraction": [
+          0.375
+        ],
+        "four_contact_fraction": [
+          1.0
+        ],
+        "stand_fraction": [
+          1.0
+        ],
+        "terminated": [
+          false
+        ],
+        "timeout": [
+          false
+        ]
+      }
+    ]
+  }
+]

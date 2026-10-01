@@ -1262,7 +1262,7 @@ class ConvexMPCLocomotion:
             self._home_foot_positions[:] = self.foot_positions
             data._stateEstimator._init_contact_history(self.foot_positions)
             for i in range(4):
-                self.footSwingTrajectories[i].setHeight(0.05)
+                self.footSwingTrajectories[i].setHeight(0.06)
                 self.footSwingTrajectories[i].setHoldPosition(self.pFoot[i])
 
         if self._hold_feet_requested:
@@ -1306,8 +1306,8 @@ class ConvexMPCLocomotion:
             else:
                 self.swingTimeRemaining[i] -= self.dt
 
-            # self.footSwingTrajectories[i].setHeight(0.2)
-            self.footSwingTrajectories[i].setHeight(self._body_height/3)
+            # Keep swing clearance independent of the target body height.
+            self.footSwingTrajectories[i].setHeight(0.06)
             
             offset = np.array([0, getSideSign(i)*data._quadruped._abadLinkLength, 0], dtype=DTYPE).reshape((3,1))
             pRobotFrame = data._quadruped.getHipLocation(i) + offset

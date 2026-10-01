@@ -96,6 +96,45 @@ def track_angular_velocity_yaw(
   return torch.exp(-error / std**2)
 
 
+def standing_joint_deviation_l2(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  command_threshold: float = 0.05,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Penalize deviation from the default joint pose only at zero command."""
+  asset: Entity = env.scene[asset_cfg.name]
+  command = env.command_manager.get_command(command_name)
+  assert command is not None
+  standing = (
+    torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2]) <= command_threshold
+  )
+  error = (
+    asset.data.joint_pos[:, asset_cfg.joint_ids]
+    - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+  )
+  return torch.sum(torch.square(error), dim=1) * standing
+
+
+def standing_joint_velocity_l2(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  command_threshold: float = 0.05,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Suppress joint motion at zero command without penalizing walking."""
+  asset: Entity = env.scene[asset_cfg.name]
+  command = env.command_manager.get_command(command_name)
+  assert command is not None
+  standing = (
+    torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2]) <= command_threshold
+  )
+  return (
+    torch.sum(torch.square(asset.data.joint_vel[:, asset_cfg.joint_ids]), dim=1)
+    * standing
+  )
+
+
 def vertical_velocity_l2(
   env: ManagerBasedRlEnv,
   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,

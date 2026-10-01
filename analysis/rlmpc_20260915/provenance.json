@@ -1,0 +1,11 @@
+{
+  "mjlab_commit": "2cfd67d286f4a24354ba0457aa72149ad70fe601",
+  "source_sha256": {
+    "analysis/rlmpc_20260915/evaluate.py": "56332798208da5a68f46a8039ddcf73073c68321a6b782684db174df0eab73d8",
+    "src/mjlab/tasks/rl_mpc/config/g23/env_cfgs.py": "2d70008d1b190a27df240e5bb7f7bc528512deda7c037d0cf9e1fd4ae5d5a1ee",
+    "src/mjlab/tasks/rl_mpc/controller/backend.py": "1d08239b31aa90497134d406284101e66f49ef852531180730e9af0fff0bca87",
+    "thirdparty/rl-mpc-locomotion/MPC_Controller/convex_MPC/ConvexMPCLocomotion.py": "f6797ac8759b32dee116a799362e5e5ba74ff159d5126a59f8c4523eb45e5725",
+    "thirdparty/rl-mpc-locomotion/MPC_Controller/convex_MPC/mpc_osqp.cc": "0e912261e5ff4c6778f9ea8bbee6dd0fd365630fe5cf12900a489aedb3c53559",
+    "logs/rsl_rl/g23_rl_mpc_foot_state_history_v3/2026-09-10_11-11-39/params/env.yaml": "e09a359959fcc689162ee4bddb18dce3f6400380203e908c79459a029a1e2e95"
+  }
+}
