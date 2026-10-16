@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import torch
@@ -11,14 +11,18 @@ from mjlab.managers.reward_manager import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import BuiltinSensor, ContactSensor
 from mjlab.sensor.terrain_height_sensor import TerrainHeightSensor
-from mjlab.tasks.velocity.mdp.terrain_utils import terrain_normal_from_sensors
-from mjlab.utils.lab_api.math import quat_apply, quat_apply_inverse
+from mjlab.tasks.velocity.mdp.terrain_utils import (
+  terrain_normal_from_sensors,
+  terrain_type_lookup,
+)
+from mjlab.utils.lab_api.math import quat_apply, quat_apply_inverse, wrap_to_pi
 from mjlab.utils.lab_api.string import (
   resolve_matching_names_values,
 )
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
+  from mjlab.tasks.velocity.mdp.velocity_command import UniformVelocityCommand
   from mjlab.viewer.debug_visualizer import DebugVisualizer
 
 
@@ -158,6 +162,86 @@ def base_height_l2(
   if heights.ndim > 1:
     heights = torch.mean(heights, dim=tuple(range(1, heights.ndim)))
   return torch.square(heights - target_height)
+
+
+class straight_heading_deviation_l2:
+  """Penalize yaw drift while a straight forward/backward command is active.
+
+  The reference heading is captured on the first step of each command segment, so
+  only heading lost while executing a straight command is charged. With
+  ``terrain_names`` the penalty is limited to those sub-terrains (e.g. stairs);
+  terrain without per-env types (play mode) is treated as eligible everywhere.
+  """
+
+  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
+    terrain_names = cfg.params.get("terrain_names")
+    self._terrain_lookup = (
+      None if terrain_names is None else terrain_type_lookup(env, terrain_names)
+    )
+    self._ref_heading = torch.zeros(env.num_envs, device=env.device)
+    # command_counter is never negative, so -1 forces a capture after reset.
+    self._ref_counter = torch.full(
+      (env.num_envs,), -1, dtype=torch.long, device=env.device
+    )
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    command_name: str,
+    terrain_names: tuple[str, ...] | None = None,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+  ) -> torch.Tensor:
+    del terrain_names  # Resolved in __init__.
+    asset: Entity = env.scene[asset_cfg.name]
+    command = cast("UniformVelocityCommand", env.command_manager.get_term(command_name))
+    heading = asset.data.heading_w
+    # A changed counter marks a resampled or freshly reset command segment.
+    new_segment = command.command_counter != self._ref_counter
+    self._ref_heading = torch.where(new_segment, heading, self._ref_heading)
+    self._ref_counter.copy_(command.command_counter)
+
+    active = command.is_forward_env | command.is_backward_env
+    if self._terrain_lookup is not None:
+      terrain = env.scene.terrain
+      assert terrain is not None
+      active = active & self._terrain_lookup[terrain.terrain_types]
+    error = wrap_to_pi(heading - self._ref_heading)
+    return torch.square(error) * active
+
+  def reset(self, env_ids: torch.Tensor | slice) -> None:
+    self._ref_counter[env_ids] = -1
+
+
+class motor_heat_l2:
+  """Penalize motor heating: actuator torque squared over each rated torque squared.
+
+  Copper loss scales with torque squared, so each actuator contributes its heating
+  relative to its continuous rating (1.0 = rated load). ``rated_torque`` maps
+  actuator-name regexes to rated torques; every actuator must match one entry.
+  """
+
+  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
+    asset_cfg: SceneEntityCfg = cfg.params.get("asset_cfg", _DEFAULT_ASSET_CFG)
+    asset: Entity = env.scene[asset_cfg.name]
+    names = asset.actuator_names
+    ids, _, values = resolve_matching_names_values(cfg.params["rated_torque"], names)
+    if sorted(ids) != list(range(len(names))):
+      missing = [n for i, n in enumerate(names) if i not in ids]
+      raise ValueError(f"No rated torque configured for actuators {missing}.")
+    rated = torch.zeros(len(names), device=env.device)
+    rated[ids] = torch.tensor(values, dtype=torch.float, device=env.device)
+    self._inv_rated_sq = 1.0 / torch.square(rated)
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    rated_torque: dict[str, float],
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+  ) -> torch.Tensor:
+    del rated_torque  # Resolved in __init__.
+    asset: Entity = env.scene[asset_cfg.name]
+    torque = asset.data.actuator_force
+    return torch.sum(torch.square(torque) * self._inv_rated_sq, dim=1)
 
 
 class upright:

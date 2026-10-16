@@ -8,6 +8,20 @@ Upcoming version (not yet released)
 Added
 ^^^^^
 
+- Added ``Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw-J60``, which
+  limits G23 joint torque to the J60 torque-speed curve (peak 19.94 / 30.5 Nm,
+  no-load 24.18 / 15.49 rad/s, with J60 rotor inertia), raises the stair heading
+  weight to -10, and adds a ``motor_heat_l2`` penalty on actuator torque relative
+  to the J60 rated torque. Observations match StairYaw, so its checkpoints can be
+  resumed directly.
+
+- Added ``Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw``, a copy of
+  the History6 stair task that keeps straight stair commands head-on. Robots on
+  pyramid stairs spawn facing a stair axis (within 10 degrees), and the new
+  ``straight_heading_deviation_l2`` reward penalizes heading drift during
+  straight forward/backward commands on stairs. Observations are unchanged, so
+  History6 checkpoints can be resumed directly.
+
 - Added an interactive RLMPC ONNX export shell script with run/checkpoint
   selection, custom output paths, overwrite confirmation, and dry-run support.
 

@@ -4,7 +4,11 @@ from pathlib import Path
 
 import mujoco
 
-from mjlab.actuator import BuiltinMotorActuatorCfg, BuiltinPositionActuatorCfg
+from mjlab.actuator import (
+  BuiltinMotorActuatorCfg,
+  BuiltinPositionActuatorCfg,
+  DcMotorActuatorCfg,
+)
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 from mjlab.utils.spec_config import CollisionCfg
 
@@ -60,6 +64,48 @@ G23_KNEE_ACTUATOR = BuiltinPositionActuatorCfg(
   effort_limit=36.0,
   # Match the zero armature used by the source URDF and GaitRL configuration.
   armature=0.0,
+  delay_min_lag=0,
+  delay_max_lag=1,
+)
+
+# J60 joint modules (quadruped_robot_controller/docs/J60.pdf): HipX/HipY use J60-6
+# and the knee uses J60-10, both without extra reduction. Motoring torque falls
+# linearly from the peak at standstill to zero at the 24 V no-load speed; braking
+# torque stays at the peak. This matches the controller's J60 simulation model.
+# The curve is applied by an explicit PD law, which is unstable at the 5 ms physics
+# step on the zero-armature knee link (kd=1 chatters and the policy falls). The rotor
+# inertias are the controller's J60 estimates and keep the explicit PD stable.
+G23_J60_6_PEAK_TORQUE = 19.94
+G23_J60_6_MAX_SPEED = 24.18
+G23_J60_10_PEAK_TORQUE = 30.5
+G23_J60_10_MAX_SPEED = 15.49
+G23_J60_6_ARMATURE = 0.004
+G23_J60_10_ARMATURE = 0.0089
+G23_J60_RATED_TORQUE: dict[str, float] = {
+  r".*_Hip[XY]_joint": 6.09,
+  r".*_Knee_joint": 9.58,
+}
+
+G23_J60_HIP_ACTUATOR = DcMotorActuatorCfg(
+  target_names_expr=(r".*_Hip[XY]_joint",),
+  stiffness=30.0,
+  damping=1.0,
+  saturation_effort=G23_J60_6_PEAK_TORQUE,
+  effort_limit=G23_J60_6_PEAK_TORQUE,
+  velocity_limit=G23_J60_6_MAX_SPEED,
+  armature=G23_J60_6_ARMATURE,
+  delay_min_lag=0,
+  delay_max_lag=1,
+)
+
+G23_J60_KNEE_ACTUATOR = DcMotorActuatorCfg(
+  target_names_expr=(r".*_Knee_joint",),
+  stiffness=30.0,
+  damping=1.0,
+  saturation_effort=G23_J60_10_PEAK_TORQUE,
+  effort_limit=G23_J60_10_PEAK_TORQUE,
+  velocity_limit=G23_J60_10_MAX_SPEED,
+  armature=G23_J60_10_ARMATURE,
   delay_min_lag=0,
   delay_max_lag=1,
 )
@@ -143,6 +189,11 @@ G23_ARTICULATION = EntityArticulationInfoCfg(
   soft_joint_pos_limit_factor=0.99,
 )
 
+G23_J60_ARTICULATION = EntityArticulationInfoCfg(
+  actuators=(G23_J60_HIP_ACTUATOR, G23_J60_KNEE_ACTUATOR),
+  soft_joint_pos_limit_factor=0.99,
+)
+
 G23_RLMPC_ARTICULATION = EntityArticulationInfoCfg(
   actuators=(G23_RLMPC_HIP_ACTUATOR, G23_RLMPC_KNEE_ACTUATOR),
   soft_joint_pos_limit_factor=0.99,
@@ -156,6 +207,17 @@ def get_g23_robot_cfg() -> EntityCfg:
     collisions=(FULL_COLLISION,),
     spec_fn=get_spec,
     articulation=G23_ARTICULATION,
+    sort_actuators=True,
+  )
+
+
+def get_g23_j60_robot_cfg() -> EntityCfg:
+  """Return a G23 configuration whose joints follow the J60 torque-speed limits."""
+  return EntityCfg(
+    init_state=HOME_KEYFRAME,
+    collisions=(FULL_COLLISION,),
+    spec_fn=get_spec,
+    articulation=G23_J60_ARTICULATION,
     sort_actuators=True,
   )
 

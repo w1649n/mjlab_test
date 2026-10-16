@@ -1,4 +1,4 @@
-"""Terrain normal estimation from raycast hit points."""
+"""Terrain helpers: normal estimation from raycast hits and sub-terrain lookup."""
 
 from __future__ import annotations
 
@@ -121,3 +121,27 @@ def terrain_normal_from_sensors(
   points = torch.cat(all_points, dim=1)
   valid_mask = torch.cat(all_valid, dim=1)
   return fit_terrain_normal(points, valid_mask)
+
+
+def terrain_type_lookup(
+  env: ManagerBasedRlEnv, terrain_names: tuple[str, ...]
+) -> torch.Tensor | None:
+  """Return a per-column mask selecting ``terrain_names``, or None if unknown.
+
+  Curriculum terrain holds one sub-terrain type per column, so
+  ``lookup[terrain.terrain_types]`` marks the envs on those types. Random-grid
+  terrain (play mode) and planes have no per-env type; callers then treat every
+  env as eligible.
+  """
+  terrain = env.scene.terrain
+  if terrain is None or terrain.terrain_origins is None:
+    return None
+  generator = terrain.cfg.terrain_generator
+  assert generator is not None
+  type_names = tuple(generator.sub_terrains)
+  unknown = set(terrain_names) - set(type_names)
+  if unknown:
+    raise ValueError(f"Unknown terrain names: {sorted(unknown)}.")
+  if not generator.curriculum:
+    return None
+  return torch.tensor([name in terrain_names for name in type_names], device=env.device)

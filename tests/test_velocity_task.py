@@ -4,6 +4,7 @@ from dataclasses import asdict
 
 import pytest
 
+from mjlab.actuator import DcMotorActuatorCfg
 from mjlab.asset_zoo.robots import G1_ACTION_SCALE, G23_ACTION_SCALE, GO1_ACTION_SCALE
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.tasks.registry import list_tasks, load_env_cfg
@@ -25,6 +26,61 @@ def test_g23_stand_preserves_history6_observations_and_zero_command_play():
   assert play_cfg.commands["twist"].rel_standing_envs == 1.0
   assert not play_cfg.commands["twist"].heading_command
   assert "randomize_terrain" not in play_cfg.events
+
+
+def test_g23_stair_yaw_extends_history6_without_changing_observations():
+  original = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6")
+  cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw")
+  assert asdict(cfg.observations["actor"]) == asdict(original.observations["actor"])
+  assert asdict(cfg.observations["critic"]) == asdict(original.observations["critic"])
+  stairs = ("pyramid_stairs", "pyramid_stairs_inv")
+
+  reset_base = cfg.events["reset_base"]
+  assert reset_base.func is mdp.reset_root_state_stair_aligned
+  assert reset_base.params["terrain_names"] == stairs
+  assert (
+    reset_base.params["pose_range"]
+    == (original.events["reset_base"].params["pose_range"])
+  )
+
+  heading = cfg.rewards["stair_heading_deviation"]
+  assert heading.func is mdp.straight_heading_deviation_l2
+  assert heading.weight < 0.0
+  assert heading.params == {"command_name": "twist", "terrain_names": stairs}
+  assert "stair_heading_deviation" not in original.rewards
+
+
+def test_g23_stair_yaw_j60_limits_torque_and_penalizes_heating():
+  base = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw")
+  cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw-J60")
+  assert asdict(cfg.observations["actor"]) == asdict(base.observations["actor"])
+  assert asdict(cfg.observations["critic"]) == asdict(base.observations["critic"])
+
+  articulation = cfg.scene.entities["robot"].articulation
+  assert articulation is not None
+  limits = {}
+  for actuator in articulation.actuators:
+    assert isinstance(actuator, DcMotorActuatorCfg)
+    limits[actuator.target_names_expr] = (
+      actuator.saturation_effort,
+      actuator.effort_limit,
+      actuator.velocity_limit,
+      actuator.armature,
+    )
+  assert limits == {
+    (r".*_Hip[XY]_joint",): (19.94, 19.94, 24.18, 0.004),
+    (r".*_Knee_joint",): (30.5, 30.5, 15.49, 0.0089),
+  }
+
+  assert cfg.rewards["stair_heading_deviation"].weight == pytest.approx(-10.0)
+  heat = cfg.rewards["motor_heat"]
+  assert heat.func is mdp.motor_heat_l2
+  assert heat.weight < 0.0
+  assert heat.params["rated_torque"] == {
+    r".*_Hip[XY]_joint": 6.09,
+    r".*_Knee_joint": 9.58,
+  }
+  assert "motor_heat" not in base.rewards
 
 
 @pytest.fixture(scope="module")

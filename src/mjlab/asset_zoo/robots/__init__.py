@@ -14,6 +14,12 @@ from mjlab.asset_zoo.robots.syncai_g23.g23_constants import (
   G23_GETUP_ACTION_SCALE as G23_GETUP_ACTION_SCALE,
 )
 from mjlab.asset_zoo.robots.syncai_g23.g23_constants import (
+  G23_J60_RATED_TORQUE as G23_J60_RATED_TORQUE,
+)
+from mjlab.asset_zoo.robots.syncai_g23.g23_constants import (
+  get_g23_j60_robot_cfg as get_g23_j60_robot_cfg,
+)
+from mjlab.asset_zoo.robots.syncai_g23.g23_constants import (
   get_g23_rl_mpc_robot_cfg as get_g23_rl_mpc_robot_cfg,
 )
 from mjlab.asset_zoo.robots.syncai_g23.g23_constants import (

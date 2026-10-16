@@ -7,6 +7,8 @@ from .env_cfgs import (
   syncai_g23_rough_env_cfg,
   syncai_g23_rough_proprio_env_cfg,
   syncai_g23_rough_proprio_history6_env_cfg,
+  syncai_g23_rough_proprio_history6_stair_yaw_env_cfg,
+  syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg,
 )
 from .rl_cfg import syncai_g23_ppo_runner_cfg
 
@@ -40,6 +42,26 @@ register_mjlab_task(
   task_id="Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6",
   env_cfg=syncai_g23_rough_proprio_history6_env_cfg(),
   play_env_cfg=syncai_g23_rough_proprio_history6_env_cfg(play=True),
+  rl_cfg=syncai_g23_ppo_runner_cfg(experiment_name="g23_velocity_proprio_history6"),
+  runner_cls=VelocityOnPolicyRunner,
+)
+
+# 2026-10-15 stair-yaw update: History6 plus a stair heading-drift penalty. It
+# shares the History6 experiment so existing runs can be resumed with --load-run.
+register_mjlab_task(
+  task_id="Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw",
+  env_cfg=syncai_g23_rough_proprio_history6_stair_yaw_env_cfg(),
+  play_env_cfg=syncai_g23_rough_proprio_history6_stair_yaw_env_cfg(play=True),
+  rl_cfg=syncai_g23_ppo_runner_cfg(experiment_name="g23_velocity_proprio_history6"),
+  runner_cls=VelocityOnPolicyRunner,
+)
+
+# 2026-10-16 J60 update: StairYaw with heading weight -10, J60 torque-speed limits,
+# and a motor heating penalty. Shares the experiment so StairYaw runs can resume.
+register_mjlab_task(
+  task_id="Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw-J60",
+  env_cfg=syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg(),
+  play_env_cfg=syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg(play=True),
   rl_cfg=syncai_g23_ppo_runner_cfg(experiment_name="g23_velocity_proprio_history6"),
   runner_cls=VelocityOnPolicyRunner,
 )

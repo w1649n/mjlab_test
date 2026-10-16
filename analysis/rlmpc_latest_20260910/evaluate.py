@@ -23,7 +23,8 @@ cfg.scene.num_envs = 1
 cfg.auto_reset = False
 env = ManagerBasedRlEnv(cfg=cfg, device="cpu")
 checkpoint = (
-  ROOT / "logs/rsl_rl/g23_rl_mpc_foot_state_history_v3/2026-09-10_11-11-39/model_2400.pt"
+  ROOT
+  / "logs/rsl_rl/g23_rl_mpc_foot_state_history_v3/2026-09-10_11-11-39/model_2400.pt"
 )
 actor = load_actor(checkpoint)[0].as_onnx(verbose=False).eval()
 results = []

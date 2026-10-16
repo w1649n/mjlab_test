@@ -6,6 +6,8 @@ from typing import Any, cast
 from mjlab.asset_zoo.robots import (
   G23_ACTION_SCALE,
   G23_FOOT_SITE_NAMES,
+  G23_J60_RATED_TORQUE,
+  get_g23_j60_robot_cfg,
   get_g23_robot_cfg,
 )
 from mjlab.envs import ManagerBasedRlEnvCfg
@@ -64,6 +66,17 @@ _G23_GATE_MAX_FOOT_AIR_TIME = 0.80
 _G23_TERMINATION_MAX_FOOT_AIR_TIME = 2.0
 _G23_EXCESSIVE_FOOT_AIR_TIME_WEIGHT = -4.0
 _G23_STANDING_MISSING_CONTACT_WEIGHT = -0.5
+# 2026-10-15 stair-yaw update: straight stair commands should climb and descend
+# head-on instead of drifting into a diagonal approach.
+_G23_STAIR_TERRAIN_NAMES = ("pyramid_stairs", "pyramid_stairs_inv")
+_G23_STAIR_SPAWN_YAW_NOISE = math.radians(10.0)
+_G23_STAIR_HEADING_DEVIATION_WEIGHT = -2.0
+# 2026-10-16 J60 update: -10 (run stair_yaw_w10) cut uphill heading drift from
+# ~13 deg to ~4 deg at 1 m/s. Climbing 20 cm stairs heated the hind HipY motors to
+# ~2.4x their rated load, so the J60 task also limits torque to the motor's
+# torque-speed curve and penalizes heating relative to the rated torque.
+_G23_J60_STAIR_HEADING_DEVIATION_WEIGHT = -10.0
+_G23_MOTOR_HEAT_WEIGHT = -0.03
 
 _G23_PROPRIO_TERM_ORDER = (
   "base_ang_vel",
@@ -605,6 +618,50 @@ def syncai_g23_rough_proprio_history6_env_cfg(
   actor = cfg.observations["actor"]
   actor.history_length = 6
   actor.flatten_history_dim = True
+  return cfg
+
+
+def syncai_g23_rough_proprio_history6_stair_yaw_env_cfg(
+  play: bool = False,
+) -> ManagerBasedRlEnvCfg:
+  """History6 stair task that keeps straight stair commands head-on."""
+  cfg = syncai_g23_rough_proprio_history6_env_cfg(play=play)
+  # Observations are unchanged, so History6 checkpoints can be fine-tuned here.
+  # Pyramid stair edges are axis-aligned: spawn facing a stair axis, then charge
+  # straight forward/backward segments for any heading lost while traversing.
+  reset_base = cfg.events["reset_base"]
+  cfg.events["reset_base"] = EventTermCfg(
+    func=mdp.reset_root_state_stair_aligned,
+    mode="reset",
+    params={
+      **reset_base.params,
+      "terrain_names": _G23_STAIR_TERRAIN_NAMES,
+      "yaw_noise": _G23_STAIR_SPAWN_YAW_NOISE,
+    },
+  )
+  cfg.rewards["stair_heading_deviation"] = RewardTermCfg(
+    func=mdp.straight_heading_deviation_l2,
+    weight=_G23_STAIR_HEADING_DEVIATION_WEIGHT,
+    params={"command_name": "twist", "terrain_names": _G23_STAIR_TERRAIN_NAMES},
+  )
+  return cfg
+
+
+def syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg(
+  play: bool = False,
+) -> ManagerBasedRlEnvCfg:
+  """StairYaw task with J60 torque-speed limits and a motor heating penalty."""
+  cfg = syncai_g23_rough_proprio_history6_stair_yaw_env_cfg(play=play)
+  # Observations are unchanged, so StairYaw checkpoints can be fine-tuned here.
+  cfg.scene.entities = {"robot": get_g23_j60_robot_cfg()}
+  cfg.rewards[
+    "stair_heading_deviation"
+  ].weight = _G23_J60_STAIR_HEADING_DEVIATION_WEIGHT
+  cfg.rewards["motor_heat"] = RewardTermCfg(
+    func=mdp.motor_heat_l2,
+    weight=_G23_MOTOR_HEAT_WEIGHT,
+    params={"rated_torque": G23_J60_RATED_TORQUE},
+  )
   return cfg
 
 
