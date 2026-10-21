@@ -20,6 +20,9 @@ from .velocity_command import (
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
   from mjlab.managers.curriculum_manager import CurriculumTermCfg
+  from mjlab.terrains import TerrainEntity
+
+  from .velocity_command import UniformVelocityCommand
 
 _DEFAULT_SCENE_CFG = SceneEntityCfg("robot")
 
@@ -95,8 +98,65 @@ def terrain_levels_vel(
 
   # Update terrain levels.
   terrain.update_env_origins(env_ids, move_up, move_down)
+  return _terrain_level_summary(terrain)
 
-  # Compute per-terrain-type mean levels.
+
+# 2026-10-16 stair-goals update: promote on demonstrated command following instead
+# of raw distance, so random standing, turning, or reversing commands neither block
+# promotion nor force demotion.
+def terrain_levels_tracked(
+  env: ManagerBasedRlEnv,
+  env_ids: torch.Tensor,
+  command_name: str,
+  min_command_distance: float = 2.0,
+  promote_ratio: float = 0.8,
+  demote_ratio: float = 0.5,
+  asset_cfg: SceneEntityCfg = _DEFAULT_SCENE_CFG,
+) -> dict[str, torch.Tensor]:
+  """Move terrain levels by how well the robot followed its commanded path.
+
+  An env that was not terminated is promoted when it left its sub-terrain, as in
+  :func:`terrain_levels_vel`, or when it was commanded at least
+  ``min_command_distance`` meters of planar travel and covered ``promote_ratio`` of
+  that path. A terminated env is demoted, and so is one that covered less than
+  ``demote_ratio`` of such a path. Episodes with shorter commanded paths (mostly
+  standing or turning) keep their level.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  terrain = env.scene.terrain
+  assert terrain is not None
+  terrain_generator = terrain.cfg.terrain_generator
+  assert terrain_generator is not None
+  command_term = cast(
+    "UniformVelocityCommand", env.command_manager.get_term(command_name)
+  )
+
+  distance = torch.norm(
+    asset.data.root_link_pos_w[env_ids, :2] - env.scene.env_origins[env_ids, :2],
+    dim=1,
+  )
+  path, progress = command_term.get_command_progress(env_ids)
+  ratio = progress / path.clamp(min=1e-6)
+  evaluated = path >= min_command_distance
+  failed = env.termination_manager.terminated[env_ids]
+
+  left_terrain = distance > terrain_generator.size[0] / 2
+  move_up = ~failed & (left_terrain | (evaluated & (ratio >= promote_ratio)))
+  move_down = ~move_up & (failed | (evaluated & (ratio < demote_ratio)))
+
+  # See terrain_levels_vel: the initial reset happens at the spawn pose.
+  if env.common_step_counter == 0:
+    move_up = torch.zeros_like(move_up)
+    move_down = torch.zeros_like(move_down)
+
+  terrain.update_env_origins(env_ids, move_up, move_down)
+  return _terrain_level_summary(terrain)
+
+
+def _terrain_level_summary(terrain: TerrainEntity) -> dict[str, torch.Tensor]:
+  """Return overall and per-terrain-type mean levels."""
+  terrain_generator = terrain.cfg.terrain_generator
+  assert terrain_generator is not None
   levels = terrain.terrain_levels.float()
   result: dict[str, torch.Tensor] = {
     "mean": torch.mean(levels),

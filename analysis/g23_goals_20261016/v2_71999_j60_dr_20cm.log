@@ -1,0 +1,527 @@
+Warp 1.14.0 initialized:
+   CUDA Toolkit 12.9, Driver 12.8
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 5090" (31 GiB, sm_120, mempool enabled)
+     "cuda:1"   : "NVIDIA GeForce RTX 5090" (31 GiB, sm_120, mempool enabled)
+   CUDA peer access:
+     Not supported
+   Kernel cache:
+     /home/robotserver3/.cache/warp/1.14.0
+Module mujoco_warp._src.smooth e597d07 load on device 'cuda:0' took 0.67 ms  (cached)
+Module _nxn_broadphase__locals__kernel_df6640ed df6640e load on device 'cuda:0' took 0.20 ms  (cached)
+Module ccd_kernel_builder__locals__ccd_kernel_4103cef8 4103cef load on device 'cuda:0' took 0.51 ms  (cached)
+Module ccd_kernel_builder__locals__ccd_kernel_4103cef8 393a61f load on device 'cuda:0' took 0.34 ms  (cached)
+Module _primitive_narrowphase__locals__primitive_narrowphase_da45ce07 da45ce0 load on device 'cuda:0' took 0.36 ms  (cached)
+Module mujoco_warp._src.constraint 880bd7f load on device 'cuda:0' took 0.27 ms  (cached)
+Module _friction_dof__locals__kernel_3c14efda 3c14efd load on device 'cuda:0' took 0.30 ms  (cached)
+Module _limit_slide_hinge__locals__kernel_4d6c55ab 4d6c55a load on device 'cuda:0' took 0.26 ms  (cached)
+Module _efc_contact_init__locals__kernel_744a1fda 744a1fd load on device 'cuda:0' took 0.20 ms  (cached)
+Module _efc_contact_jac_dense__locals__kernel_760e2e1a d6aba00 load on device 'cuda:0' took 0.24 ms  (cached)
+Module _efc_contact_update__locals__kernel_c40b0799 c40b079 load on device 'cuda:0' took 0.19 ms  (cached)
+Module mujoco_warp._src.forward 687ddb7 load on device 'cuda:0' took 0.29 ms  (cached)
+Module mujoco_warp._src.passive 8ff6993 load on device 'cuda:0' took 0.27 ms  (cached)
+Module mujoco_warp._src.sensor 42e0a24 load on device 'cuda:0' took 0.36 ms  (cached)
+Module mujoco_warp._src.forward 2190340 load on device 'cuda:0' took 0.31 ms  (cached)
+Module _qfrc_smooth__locals__kernel_6eb3d958 6eb3d95 load on device 'cuda:0' took 0.19 ms  (cached)
+Module mujoco_warp._src.support d1e71d9 load on device 'cuda:0' took 0.19 ms  (cached)
+Module _tile_cholesky_factorize_solve_block__locals__kernel_419fe7e0 4a5ffaf load on device 'cuda:0' took 16.62 ms  (cached)
+Module _solve_init_dof__locals__kernel_99a497d1 99a497d load on device 'cuda:0' took 0.23 ms  (cached)
+Module mujoco_warp._src.solver 245b5b3 load on device 'cuda:0' took 0.38 ms  (cached)
+Module _solve_init_jaref_kernel__locals__kernel_16fae688 16fae68 load on device 'cuda:0' took 0.19 ms  (cached)
+Module mul_m_kernel__locals___mul_m_fd2186c4 fd2186c load on device 'cuda:0' took 0.20 ms  (cached)
+Module _update_constraint_efc__locals__kernel_4af8f110 4af8f11 load on device 'cuda:0' took 0.19 ms  (cached)
+Module _update_constraint_init_qfrc_constraint_dense__locals__kernel_391cb5b4 391cb5b load on device 'cuda:0' took 0.19 ms  (cached)
+Module _update_gradient_zero_grad_dot__locals__kernel_cb780630 cb78063 load on device 'cuda:0' took 0.19 ms  (cached)
+Module _update_gradient_grad__locals__kernel_0cbf4927 0cbf492 load on device 'cuda:0' took 0.19 ms  (cached)
+Module _update_gradient_JTDAJ_dense_tiled__locals__kernel_14aab72c 011f854 load on device 'cuda:0' took 0.45 ms  (cached)
+Module _update_gradient_cholesky__locals__kernel_3502583c 7ab5540 load on device 'cuda:0' took 23.50 ms  (cached)
+Module _linesearch_iterative_kernel__locals__kernel_d3ea36af e1537a9 load on device 'cuda:0' took 0.30 ms  (cached)
+Module _contact_sort__locals__contact_sort_d535624f 7776180 load on device 'cuda:0' took 0.25 ms  (cached)
+Module mujoco_warp._src.derivative e770e28 load on device 'cuda:0' took 0.26 ms  (cached)
+Module _next_time_builder__locals___next_time_95ad6d7a 95ad6d7 load on device 'cuda:0' took 0.22 ms  (cached)
+Module reset_data__locals__reset_xfrc_applied_03030511 0303051 load on device 'cuda:0' took 0.20 ms  (cached)
+Module reset_data__locals__reset_M_631075dd 631075d load on device 'cuda:0' took 0.19 ms  (cached)
+Module reset_data__locals__reset_mocap_6513201c 6513201 load on device 'cuda:0' took 0.18 ms  (cached)
+Module reset_data__locals__reset_contact_5c08f689 5c08f68 load on device 'cuda:0' took 0.19 ms  (cached)
+Module reset_data__locals__reset_sleep_50b990da 50b990d load on device 'cuda:0' took 0.18 ms  (cached)
+Module reset_data__locals__reset_nworld_69a10925 69a1092 load on device 'cuda:0' took 0.21 ms  (cached)
+Module mujoco_warp._src.render_util ff4fe80 load on device 'cuda:0' took 0.26 ms  (cached)
+Module mujoco_warp._src.bvh d9cfd91 load on device 'cuda:0' took 0.30 ms  (cached)
+Module mujoco_warp._src.ray d79c433 load on device 'cuda:0' took 0.37 ms  (cached)
+
++---------------------------------+
+|         Base Environment        |
++------------------------+--------+
+| Property               | Value  |
++------------------------+--------+
+| Number of environments | 512    |
+| Environment device     | cuda:0 |
+| Environment seed       | None   |
+| Physics step-size      | 0.005  |
+| Environment step-size  | 0.02   |
++------------------------+--------+
+
+[INFO] <EventManager> contains 2 active terms.
++-------------------------------------+
+| Active Event Terms in Mode: 'reset' |
++--------+----------------------------+
+| Index  | Name                       |
++--------+----------------------------+
+|   0    | reset_base                 |
+|   1    | reset_robot_joints         |
++--------+----------------------------+
++---------------------------------------+
+| Active Event Terms in Mode: 'startup' |
++---------+-----------------------------+
+|  Index  | Name                        |
++---------+-----------------------------+
+|    0    | encoder_bias                |
+|    1    | base_com                    |
+|    2    | foot_friction_slide         |
+|    3    | foot_friction_spin          |
+|    4    | foot_friction_roll          |
++---------+-----------------------------+
++-----------------------------+
+| Domain Randomization Fields |
++-------+---------------------+
+| Index | Field Name          |
++-------+---------------------+
+|   0   | body_ipos           |
+|   1   | body_subtreemass    |
+|   2   | dof_invweight0      |
+|   3   | body_invweight0     |
+|   4   | tendon_length0      |
+|   5   | tendon_invweight0   |
+|   6   | actuator_acc0       |
+|   7   | geom_friction       |
++-------+---------------------+
+
+Module repeat_array_kernel_4f67a4c3 711f54c load on device 'cuda:0' took 0.26 ms  (cached)
+Module repeat_array_kernel_4f67a4c3 7224d07 load on device 'cuda:0' took 0.20 ms  (cached)
+Module repeat_array_kernel_4f67a4c3 b2885b0 load on device 'cuda:0' took 0.22 ms  (cached)
+[INFO] <CommandManager> contains 1 active terms.
++----------------------------------------+
+|          Active Command Terms          |
++-------+-------+------------------------+
+| Index | Name  |          Type          |
++-------+-------+------------------------+
+|   0   | twist | UniformVelocityCommand |
++-------+-------+------------------------+
+
+[INFO] <ActionManager> contains 1 active terms.
++---------------------------------+
+| Active Action Terms (shape: 12) |
++-------+-----------+-------------+
+| Index | Name      |   Dimension |
++-------+-----------+-------------+
+|   0   | joint_pos |          12 |
++-------+-----------+-------------+
+
+[INFO] <ObservationManager> contains 2 groups.
++------------------------------------------------------------+
+| Active Observation Terms in Group: 'actor' (shape: (270,)) |
++--------+-------------------------+-------------------------+
+| Index  | Name                    |          Shape          |
++--------+-------------------------+-------------------------+
+|   0    | base_ang_vel            |     (18,)  ← 6×(3,)     |
+|   1    | projected_gravity       |     (18,)  ← 6×(3,)     |
+|   2    | command                 |     (18,)  ← 6×(3,)     |
+|   3    | joint_pos               |     (72,)  ← 6×(12,)    |
+|   4    | joint_vel               |     (72,)  ← 6×(12,)    |
+|   5    | actions                 |     (72,)  ← 6×(12,)    |
++--------+-------------------------+-------------------------+
++-------------------------------------------------------------+
+| Active Observation Terms in Group: 'critic' (shape: (259,)) |
++----------+-----------------------------------+--------------+
+|  Index   | Name                              |    Shape     |
++----------+-----------------------------------+--------------+
+|    0     | base_lin_vel                      |     (3,)     |
+|    1     | base_ang_vel                      |     (3,)     |
+|    2     | projected_gravity                 |     (3,)     |
+|    3     | joint_pos                         |    (12,)     |
+|    4     | joint_vel                         |    (12,)     |
+|    5     | actions                           |    (12,)     |
+|    6     | command                           |     (3,)     |
+|    7     | height_scan                       |    (187,)    |
+|    8     | foot_height                       |     (4,)     |
+|    9     | foot_air_time                     |     (4,)     |
+|    10    | foot_contact                      |     (4,)     |
+|    11    | foot_contact_forces               |    (12,)     |
++----------+-----------------------------------+--------------+
+
+[INFO] <TerminationManager> contains 5 active terms.
++--------------------------------------------+
+|          Active Termination Terms          |
++-------+-------------------------+----------+
+| Index | Name                    | Time Out |
++-------+-------------------------+----------+
+|   0   | time_out                |   True   |
+|   1   | illegal_contact         |  False   |
+|   2   | shank_illegal_contact   |  False   |
+|   3   | torso_illegal_contact   |  False   |
+|   4   | prolonged_foot_air_time |  False   |
++-------+-------------------------+----------+
+
+[INFO] <RewardManager> contains 23 active terms.
++---------------------------------------------------+
+|                Active Reward Terms                |
++-------+--------------------------------+----------+
+| Index | Name                           |   Weight |
++-------+--------------------------------+----------+
+|   0   | track_linear_velocity          |      2.0 |
+|   1   | track_angular_velocity         |      2.0 |
+|   2   | upright                        |      1.0 |
+|   3   | pose                           |      1.0 |
+|   4   | body_ang_vel                   |    -0.02 |
+|   5   | angular_momentum               |      0.0 |
+|   6   | dof_pos_limits                 |     -1.0 |
+|   7   | action_rate_l2                 |    -0.05 |
+|   8   | air_time                       |      0.0 |
+|   9   | foot_clearance                 |    -0.75 |
+|   10  | foot_swing_height              |    -0.25 |
+|   11  | foot_slip                      |     -0.1 |
+|   12  | soft_landing                   |   -5e-05 |
+|   13  | excessive_foot_air_time        |     -4.0 |
+|   14  | standing_missing_foot_contacts |     -0.5 |
+|   15  | vertical_velocity_l2           |     -0.5 |
+|   16  | base_height_l2                 |     -1.0 |
+|   17  | electrical_power               |   -2e-05 |
+|   18  | joint_acc_l2                   | -2.5e-07 |
+|   19  | action_acc_l2                  |    -0.01 |
+|   20  | self_collisions                |     -0.1 |
+|   21  | shank_collision                |    -0.25 |
+|   22  | torso_collision                |     -0.1 |
++-------+--------------------------------+----------+
+
+[INFO] <NullCurriculumManager> (inactive)
+[INFO] <MetricsManager> contains 1 active terms.
++-------------------------+
+|   Active Metrics Terms  |
++-------+-----------------+
+| Index | Name            |
++-------+-----------------+
+|   0   | mean_action_acc |
++-------+-----------------+
+
+[INFO] <NullRecorderManager> (inactive)
+Module mujoco_warp._src.io 19274fb load on device 'cuda:0' took 0.77 ms  (cached)
+Module _tile_cholesky_factorize_block__locals__kernel_2efc24b8 2b5140f load on device 'cuda:0' took 16.57 ms  (cached)
+Module _tile_cholesky_solve_block__locals__kernel_8ea2ce58 1256b29 load on device 'cuda:0' took 16.15 ms  (cached)
+--------------------------------------------------------------------------------
+Resolved observation sets: 
+	 actor :  ('actor',)
+	 critic :  ('critic',)
+--------------------------------------------------------------------------------
+Actor Model: MLPModel(
+  (obs_normalizer): EmpiricalNormalization()
+  (distribution): GaussianDistribution()
+  (mlp): MLP(
+    (0): Linear(in_features=270, out_features=512, bias=True)
+    (1): ELU(alpha=1.0)
+    (2): Linear(in_features=512, out_features=256, bias=True)
+    (3): ELU(alpha=1.0)
+    (4): Linear(in_features=256, out_features=128, bias=True)
+    (5): ELU(alpha=1.0)
+    (6): Linear(in_features=128, out_features=12, bias=True)
+  )
+)
+Critic Model: MLPModel(
+  (obs_normalizer): EmpiricalNormalization()
+  (mlp): MLP(
+    (0): Linear(in_features=259, out_features=512, bias=True)
+    (1): ELU(alpha=1.0)
+    (2): Linear(in_features=512, out_features=256, bias=True)
+    (3): ELU(alpha=1.0)
+    (4): Linear(in_features=256, out_features=128, bias=True)
+    (5): ELU(alpha=1.0)
+    (6): Linear(in_features=128, out_features=1, bias=True)
+  )
+)
+{
+ "flat": {},
+ "stairs": {
+  "up_20cm_v0.3": {
+   "n": 64,
+   "success_rate": 1.0,
+   "fail_reasons": {},
+   "max_x_mean": 8.703492067754269,
+   "heading_drift_max_deg_p50_p90_max": [
+    12.693305015563965,
+    27.52706279754639,
+    44.6712646484375
+   ],
+   "heading_within_2deg": 0.015625,
+   "lateral_drift_abs_mean_m": 0.7961509451270103,
+   "nose_up_mean_deg": 14.192082539200783,
+   "nose_up_min_deg_worst": -1.6894378662109375,
+   "nose_up_max_deg_best": 37.31764602661133,
+   "roll_abs_max_deg_worst": 15.234594345092773,
+   "tau_rms_ratio_mean_per_actuator": {
+    "FL_HipX_joint": 0.69,
+    "FL_HipY_joint": 0.44,
+    "FL_Knee_joint": 0.54,
+    "FR_HipX_joint": 0.66,
+    "FR_HipY_joint": 0.43,
+    "FR_Knee_joint": 0.51,
+    "HL_HipX_joint": 0.41,
+    "HL_HipY_joint": 0.79,
+    "HL_Knee_joint": 0.98,
+    "HR_HipX_joint": 0.41,
+    "HR_HipY_joint": 0.83,
+    "HR_Knee_joint": 1.0
+   },
+   "tau_rms_ratio_max_actuator_mean": 1.0320858691579862,
+   "tau_peak_ratio_max": 1.0000000267832305,
+   "stair_time_s_mean": 12.911875,
+   "mean_speed": 0.2801826222020356
+  },
+  "up_20cm_v0.5": {
+   "n": 64,
+   "success_rate": 1.0,
+   "fail_reasons": {},
+   "max_x_mean": 14.519436717033386,
+   "heading_drift_max_deg_p50_p90_max": [
+    10.300054550170898,
+    18.64257678985596,
+    22.061906814575195
+   ],
+   "heading_within_2deg": 0.0,
+   "lateral_drift_abs_mean_m": 0.619341067969799,
+   "nose_up_mean_deg": 16.885204821825027,
+   "nose_up_min_deg_worst": 7.710592269897461,
+   "nose_up_max_deg_best": 33.87894058227539,
+   "roll_abs_max_deg_worst": 17.354270935058594,
+   "tau_rms_ratio_mean_per_actuator": {
+    "FL_HipX_joint": 0.66,
+    "FL_HipY_joint": 0.54,
+    "FL_Knee_joint": 0.5,
+    "FR_HipX_joint": 0.67,
+    "FR_HipY_joint": 0.48,
+    "FR_Knee_joint": 0.52,
+    "HL_HipX_joint": 0.49,
+    "HL_HipY_joint": 0.95,
+    "HL_Knee_joint": 1.11,
+    "HR_HipX_joint": 0.44,
+    "HR_HipY_joint": 1.0,
+    "HR_Knee_joint": 1.1
+   },
+   "tau_rms_ratio_max_actuator_mean": 1.178617102563479,
+   "tau_peak_ratio_max": 1.0,
+   "stair_time_s_mean": 8.193437499999998,
+   "mean_speed": 0.4395799853284056
+  },
+  "up_20cm_v0.8": {
+   "n": 64,
+   "success_rate": 1.0,
+   "fail_reasons": {},
+   "max_x_mean": 23.348428547382355,
+   "heading_drift_max_deg_p50_p90_max": [
+    8.412654876708984,
+    15.795268535614017,
+    30.71137046813965
+   ],
+   "heading_within_2deg": 0.0,
+   "lateral_drift_abs_mean_m": 0.4885057955980301,
+   "nose_up_mean_deg": 22.540357559919357,
+   "nose_up_min_deg_worst": 5.6952805519104,
+   "nose_up_max_deg_best": 38.42504119873047,
+   "roll_abs_max_deg_worst": 19.5293025970459,
+   "tau_rms_ratio_mean_per_actuator": {
+    "FL_HipX_joint": 0.7,
+    "FL_HipY_joint": 0.5,
+    "FL_Knee_joint": 0.55,
+    "FR_HipX_joint": 0.66,
+    "FR_HipY_joint": 0.48,
+    "FR_Knee_joint": 0.53,
+    "HL_HipX_joint": 0.41,
+    "HL_HipY_joint": 1.1,
+    "HL_Knee_joint": 1.32,
+    "HR_HipX_joint": 0.4,
+    "HR_HipY_joint": 1.12,
+    "HR_Knee_joint": 1.29
+   },
+   "tau_rms_ratio_max_actuator_mean": 1.349251575538355,
+   "tau_peak_ratio_max": 1.0000000267832305,
+   "stair_time_s_mean": 5.4021875,
+   "mean_speed": 0.6668224145014044
+  },
+  "up_20cm_v1.0": {
+   "n": 64,
+   "success_rate": 1.0,
+   "fail_reasons": {},
+   "max_x_mean": 26.085414856672287,
+   "heading_drift_max_deg_p50_p90_max": [
+    11.46328353881836,
+    18.996160125732423,
+    28.588300704956055
+   ],
+   "heading_within_2deg": 0.0,
+   "lateral_drift_abs_mean_m": 0.5881574153900146,
+   "nose_up_mean_deg": 25.752318382263184,
+   "nose_up_min_deg_worst": 10.1309814453125,
+   "nose_up_max_deg_best": 39.07036590576172,
+   "roll_abs_max_deg_worst": 11.428345680236816,
+   "tau_rms_ratio_mean_per_actuator": {
+    "FL_HipX_joint": 0.74,
+    "FL_HipY_joint": 0.48,
+    "FL_Knee_joint": 0.6,
+    "FR_HipX_joint": 0.66,
+    "FR_HipY_joint": 0.47,
+    "FR_Knee_joint": 0.54,
+    "HL_HipX_joint": 0.41,
+    "HL_HipY_joint": 1.06,
+    "HL_Knee_joint": 1.37,
+    "HR_HipX_joint": 0.41,
+    "HR_HipY_joint": 1.15,
+    "HR_Knee_joint": 1.36
+   },
+   "tau_rms_ratio_max_actuator_mean": 1.4245586472636451,
+   "tau_peak_ratio_max": 1.0000000267832305,
+   "stair_time_s_mean": 4.3790625,
+   "mean_speed": 0.8226386848697167
+  },
+  "down_20cm_v0.3": {
+   "n": 64,
+   "success_rate": 0.96875,
+   "fail_reasons": {
+    "shank_illegal_contact": 2
+   },
+   "max_x_mean": 8.374607745558023,
+   "heading_drift_max_deg_p50_p90_max": [
+    6.971416473388672,
+    11.492919921875,
+    20.577993392944336
+   ],
+   "heading_within_2deg": 0.016129032258064516,
+   "lateral_drift_abs_mean_m": 0.39890074729919434,
+   "nose_up_mean_deg": -17.038238525390625,
+   "nose_up_min_deg_worst": -30.383834838867188,
+   "nose_up_max_deg_best": -6.5867156982421875,
+   "roll_abs_max_deg_worst": 12.071316719055176,
+   "tau_rms_ratio_mean_per_actuator": {
+    "FL_HipX_joint": 0.28,
+    "FL_HipY_joint": 1.02,
+    "FL_Knee_joint": 0.46,
+    "FR_HipX_joint": 0.28,
+    "FR_HipY_joint": 1.03,
+    "FR_Knee_joint": 0.45,
+    "HL_HipX_joint": 0.33,
+    "HL_HipY_joint": 0.31,
+    "HL_Knee_joint": 0.26,
+    "HR_HipX_joint": 0.34,
+    "HR_HipY_joint": 0.31,
+    "HR_Knee_joint": 0.25
+   },
+   "tau_rms_ratio_max_actuator_mean": 1.0938708298135231,
+   "tau_peak_ratio_max": 0.9150763332783995,
+   "stair_time_s_mean": 13.75483870967742,
+   "mean_speed": 0.26258515767398916
+  },
+  "down_20cm_v0.5": {
+   "n": 64,
+   "success_rate": 1.0,
+   "fail_reasons": {},
+   "max_x_mean": 14.408100262284279,
+   "heading_drift_max_deg_p50_p90_max": [
+    7.18822717666626,
+    12.033813095092775,
+    15.007304191589355
+   ],
+   "heading_within_2deg": 0.03125,
+   "lateral_drift_abs_mean_m": 0.37858743965625763,
+   "nose_up_mean_deg": -17.660543382167816,
+   "nose_up_min_deg_worst": -30.289653778076172,
+   "nose_up_max_deg_best": -7.833168029785156,
+   "roll_abs_max_deg_worst": 12.086950302124023,
+   "tau_rms_ratio_mean_per_actuator": {
+    "FL_HipX_joint": 0.34,
+    "FL_HipY_joint": 0.98,
+    "FL_Knee_joint": 0.51,
+    "FR_HipX_joint": 0.34,
+    "FR_HipY_joint": 0.97,
+    "FR_Knee_joint": 0.5,
+    "HL_HipX_joint": 0.39,
+    "HL_HipY_joint": 0.35,
+    "HL_Knee_joint": 0.35,
+    "HR_HipX_joint": 0.4,
+    "HR_HipY_joint": 0.35,
+    "HR_Knee_joint": 0.37
+   },
+   "tau_rms_ratio_max_actuator_mean": 1.057976272648387,
+   "tau_peak_ratio_max": 1.0000000267832305,
+   "stair_time_s_mean": 8.533750000000001,
+   "mean_speed": 0.42254843540621667
+  },
+  "down_20cm_v0.8": {
+   "n": 64,
+   "success_rate": 1.0,
+   "fail_reasons": {},
+   "max_x_mean": 23.794998466968536,
+   "heading_drift_max_deg_p50_p90_max": [
+    8.668896198272705,
+    13.568817710876464,
+    18.269935607910156
+   ],
+   "heading_within_2deg": 0.0,
+   "lateral_drift_abs_mean_m": 0.3121817857027054,
+   "nose_up_mean_deg": -18.216487497091293,
+   "nose_up_min_deg_worst": -31.91105842590332,
+   "nose_up_max_deg_best": -5.951301574707031,
+   "roll_abs_max_deg_worst": 13.402002334594727,
+   "tau_rms_ratio_mean_per_actuator": {
+    "FL_HipX_joint": 0.42,
+    "FL_HipY_joint": 1.02,
+    "FL_Knee_joint": 0.55,
+    "FR_HipX_joint": 0.41,
+    "FR_HipY_joint": 1.03,
+    "FR_Knee_joint": 0.54,
+    "HL_HipX_joint": 0.45,
+    "HL_HipY_joint": 0.4,
+    "HL_Knee_joint": 0.46,
+    "HR_HipX_joint": 0.46,
+    "HR_HipY_joint": 0.4,
+    "HR_Knee_joint": 0.47
+   },
+   "tau_rms_ratio_max_actuator_mean": 1.0927022066218122,
+   "tau_peak_ratio_max": 1.0000000267832305,
+   "stair_time_s_mean": 5.260625,
+   "mean_speed": 0.6850410167629699
+  },
+  "down_20cm_v1.0": {
+   "n": 64,
+   "success_rate": 1.0,
+   "fail_reasons": {},
+   "max_x_mean": 26.15162581205368,
+   "heading_drift_max_deg_p50_p90_max": [
+    6.024554491043091,
+    10.934108829498292,
+    16.639951705932617
+   ],
+   "heading_within_2deg": 0.0,
+   "lateral_drift_abs_mean_m": 0.2999841794371605,
+   "nose_up_mean_deg": -16.850119024515152,
+   "nose_up_min_deg_worst": -31.37997817993164,
+   "nose_up_max_deg_best": -4.85174560546875,
+   "roll_abs_max_deg_worst": 12.282838821411133,
+   "tau_rms_ratio_mean_per_actuator": {
+    "FL_HipX_joint": 0.43,
+    "FL_HipY_joint": 1.09,
+    "FL_Knee_joint": 0.6,
+    "FR_HipX_joint": 0.44,
+    "FR_HipY_joint": 1.12,
+    "FR_Knee_joint": 0.59,
+    "HL_HipX_joint": 0.47,
+    "HL_HipY_joint": 0.45,
+    "HL_Knee_joint": 0.49,
+    "HR_HipX_joint": 0.5,
+    "HR_HipY_joint": 0.46,
+    "HR_Knee_joint": 0.5
+   },
+   "tau_rms_ratio_max_actuator_mean": 1.1777990508353575,
+   "tau_peak_ratio_max": 1.0000000267832305,
+   "stair_time_s_mean": 4.083125000000001,
+   "mean_speed": 0.8822069960526395
+  }
+ }
+}

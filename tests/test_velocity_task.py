@@ -1,13 +1,15 @@
 """Tests specific to velocity tasks."""
 
 from dataclasses import asdict
+from typing import Any, cast
 
 import pytest
 
 from mjlab.actuator import DcMotorActuatorCfg
 from mjlab.asset_zoo.robots import G1_ACTION_SCALE, G23_ACTION_SCALE, GO1_ACTION_SCALE
 from mjlab.envs.mdp.actions import JointPositionActionCfg
-from mjlab.tasks.registry import list_tasks, load_env_cfg
+from mjlab.rl import RslRlOnPolicyRunnerCfg
+from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg
 from mjlab.tasks.velocity import mdp
 from mjlab.tasks.velocity.config.g23.rl_cfg import syncai_g23_ppo_runner_cfg
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
@@ -81,6 +83,63 @@ def test_g23_stair_yaw_j60_limits_torque_and_penalizes_heating():
     r".*_Knee_joint": 9.58,
   }
   assert "motor_heat" not in base.rewards
+
+
+def test_g23_stair_goals_extends_j60_for_the_stair_goals():
+  base_id = "Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw-J60"
+  task_id = "Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-J60-StairGoals"
+  base = load_env_cfg(base_id)
+  cfg = load_env_cfg(task_id)
+  # Same actor, and the critic keeps its layout with base-frame contact forces.
+  assert asdict(cfg.observations["actor"]) == asdict(base.observations["actor"])
+  critic = cfg.observations["critic"].terms
+  assert list(critic) == list(base.observations["critic"].terms)
+  assert critic["foot_contact_forces"].func is mdp.foot_contact_forces_b
+  assert asdict(cfg.scene.entities["robot"]) == asdict(base.scene.entities["robot"])
+
+  twist = cfg.commands["twist"]
+  assert isinstance(twist, UniformVelocityCommandCfg)
+  assert twist.directional_heading_hold
+  assert twist.heading_control_stiffness == pytest.approx(3.0)
+  assert twist.rel_standing_envs == pytest.approx(0.2)
+  fine_yaw = cfg.rewards["track_yaw_rate_fine"]
+  assert fine_yaw.func is mdp.track_angular_velocity_yaw
+  assert fine_yaw.params["std"] < cfg.rewards["track_angular_velocity"].params["std"]
+
+  assert cfg.scene.terrain is not None
+  generator = cfg.scene.terrain.terrain_generator
+  assert generator is not None
+  for name in ("pyramid_stairs", "pyramid_stairs_inv"):
+    stairs = cast(Any, generator.sub_terrains[name])
+    assert stairs.step_height_range == (0.05, 0.25)
+  assert list(cfg.curriculum) == ["command_performance", "terrain_levels"]
+  assert cfg.curriculum["terrain_levels"].func is mdp.terrain_levels_tracked
+  assert cfg.rewards["foot_clearance"].func is mdp.feet_clearance_stair_adaptive
+  assert cfg.rewards["foot_swing_height"].func is mdp.feet_swing_height_stair_adaptive
+
+  deviation = cfg.rewards["standing_joint_deviation"]
+  assert deviation.weight < 0.0
+  assert deviation.params["foot_height_sensor_name"] == "foot_height_scan"
+  fine_lin = cfg.rewards["track_linear_velocity_fine"]
+  assert fine_lin.func is mdp.track_linear_velocity_xy
+  assert fine_lin.params["std"] < cfg.rewards["track_linear_velocity"].params["std"]
+  assert cfg.rewards["standing_joint_velocity"].params["settle_time_s"] > 0.0
+  contacts = cfg.rewards["standing_missing_foot_contacts"]
+  assert contacts.params["settle_time_s"] > 0.0
+  heat = cfg.rewards["motor_heat_excess"]
+  assert heat.func is mdp.motor_heat_l2
+  assert heat.weight < 0.0 and heat.params["threshold"] == pytest.approx(1.0)
+  assert "settle_time_s" not in base.rewards["standing_missing_foot_contacts"].params
+
+  play = load_env_cfg(task_id, play=True)
+  assert play.curriculum == {}
+  rl_cfg, base_rl_cfg = load_rl_cfg(task_id), load_rl_cfg(base_id)
+  assert isinstance(rl_cfg, RslRlOnPolicyRunnerCfg)
+  assert isinstance(base_rl_cfg, RslRlOnPolicyRunnerCfg)
+  symmetry_cfg = rl_cfg.algorithm.symmetry_cfg
+  assert symmetry_cfg is not None and symmetry_cfg["use_data_augmentation"]
+  assert rl_cfg.algorithm.entropy_coef == pytest.approx(0.003)
+  assert base_rl_cfg.algorithm.symmetry_cfg is None
 
 
 @pytest.fixture(scope="module")
@@ -519,3 +578,19 @@ def test_g23_stair_training_update() -> None:
   assert push.func is mdp.apply_body_impulse
   assert push.params["duration_s"] == (0.10, 0.15)
   assert push.params["cooldown_s"] == (8.0, 12.0)
+
+
+def test_velocity_tasks_do_not_share_sub_terrain_configs():
+  """G23 stair tuning must not leak into other robots or other G23 tasks."""
+  go1 = load_env_cfg("Mjlab-Velocity-Rough-Unitree-Go1")
+  goals = load_env_cfg(
+    "Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-J60-StairGoals"
+  )
+  j60 = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw-J60")
+  ranges = []
+  for cfg in (go1, goals, j60):
+    assert cfg.scene.terrain is not None
+    generator = cfg.scene.terrain.terrain_generator
+    assert generator is not None
+    ranges.append(cast(Any, generator.sub_terrains["pyramid_stairs"]).step_height_range)
+  assert ranges == [(0.0, 0.1), (0.05, 0.25), (0.02, 0.2)]

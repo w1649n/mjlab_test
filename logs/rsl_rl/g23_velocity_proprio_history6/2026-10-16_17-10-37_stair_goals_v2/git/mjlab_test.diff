@@ -1,0 +1,1125 @@
+--- git commit ---
+ff10b2fc1908cb8749ce9f825e39c5467e1ed364
+
+
+--- git status ---
+On branch g23_20cm
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   docs/source/changelog.rst
+	modified:   src/mjlab/rl/config.py
+	modified:   src/mjlab/rl/runner.py
+	modified:   src/mjlab/tasks/velocity/config/g23/__init__.py
+	modified:   src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+	modified:   src/mjlab/tasks/velocity/config/g23/rl_cfg.py
+	modified:   src/mjlab/tasks/velocity/mdp/curriculums.py
+	modified:   src/mjlab/tasks/velocity/mdp/observations.py
+	modified:   src/mjlab/tasks/velocity/mdp/rewards.py
+	modified:   src/mjlab/tasks/velocity/mdp/terrain_utils.py
+	modified:   src/mjlab/tasks/velocity/mdp/velocity_command.py
+	modified:   src/mjlab/tasks/velocity/velocity_env_cfg.py
+	modified:   tests/test_velocity_motor_heat.py
+	modified:   tests/test_velocity_task.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	analysis/g23_goals_20261016/goals_63000_j60_dr.json
+	analysis/g23_goals_20261016/goals_63000_j60_dr.log
+	analysis/g23_goals_20261016/goals_63000_j60_dr_20cm.json
+	analysis/g23_goals_20261016/goals_63000_j60_dr_20cm.log
+	analysis/g23_goals_20261016/goals_63000_j60_dr_hold3.json
+	analysis/g23_goals_20261016/goals_63000_j60_dr_hold3.log
+	analysis/g23_goals_20261016/goals_64000_j60_dr.json
+	analysis/g23_goals_20261016/goals_64000_j60_dr.log
+	analysis/g23_goals_20261016/goals_64000_j60_dr_20cm.json
+	analysis/g23_goals_20261016/goals_64000_j60_dr_20cm.log
+	analysis/g23_goals_20261016/goals_64000_j60_dr_hold3.json
+	analysis/g23_goals_20261016/goals_64000_j60_dr_hold3.log
+	analysis/g23_goals_20261016/goals_65000_j60_dr.json
+	analysis/g23_goals_20261016/goals_65000_j60_dr.log
+	analysis/g23_goals_20261016/goals_65000_j60_dr_20cm.json
+	analysis/g23_goals_20261016/goals_65000_j60_dr_20cm.log
+	analysis/g23_goals_20261016/goals_65000_j60_dr_hold3.json
+	analysis/g23_goals_20261016/goals_65000_j60_dr_hold3.log
+	analysis/g23_goals_20261016/goals_66000_j60_dr.json
+	analysis/g23_goals_20261016/goals_66000_j60_dr.log
+	analysis/g23_goals_20261016/goals_66000_j60_dr_20cm.json
+	analysis/g23_goals_20261016/goals_66000_j60_dr_20cm.log
+	analysis/g23_goals_20261016/goals_66000_j60_dr_hold3.json
+	analysis/g23_goals_20261016/goals_66000_j60_dr_hold3.log
+	analysis/g23_goals_20261016/goals_67000_j60_dr.json
+	analysis/g23_goals_20261016/goals_67000_j60_dr.log
+	analysis/g23_goals_20261016/goals_67000_j60_dr_20cm.json
+	analysis/g23_goals_20261016/goals_67000_j60_dr_20cm.log
+	analysis/g23_goals_20261016/goals_67000_j60_dr_hold3.json
+	analysis/g23_goals_20261016/goals_67000_j60_dr_hold3.log
+	analysis/g23_goals_20261016/j60_62000_j60_dr.json
+	analysis/g23_goals_20261016/j60_62000_j60_dr.log
+	analysis/g23_goals_20261016/j60_62000_j60_dr_20cm.json
+	analysis/g23_goals_20261016/j60_62000_j60_dr_20cm.log
+	analysis/g23_goals_20261016/j60_62000_j60_dr_hold3.json
+	analysis/g23_goals_20261016/j60_62000_j60_dr_hold3.log
+	analysis/g23_goals_20261016/reward_attr_20cm.json
+	analysis/g23_goals_20261016/reward_attr_20cm_v2.json
+	analysis/g23_goals_20261016/reward_attr_stairstop.json
+	analysis/g23_goals_20261016/reward_attr_stairstop_v2.json
+	analysis/g23_goals_20261016/reward_attribution.py
+	src/mjlab/tasks/velocity/config/g23/symmetry.py
+	tests/test_velocity_g23_symmetry.py
+	tests/test_velocity_stair_goals.py
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/docs/source/changelog.rst b/docs/source/changelog.rst
+index 07a05b3..c3f8737 100644
+--- a/docs/source/changelog.rst
++++ b/docs/source/changelog.rst
+@@ -8,6 +8,31 @@ Upcoming version (not yet released)
+ Added
+ ^^^^^
+ 
++- Added ``Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-J60-StairGoals``, which
++  extends the J60 stair task for the heading, 20 cm stair, stopping and motor
++  heating goals. Straight forward/backward commands hold their starting heading
++  through ``ang_vel_z`` (gain 3.0, matching a deployed IMU heading hold), and
++  narrow yaw-rate and planar-velocity rewards make small corrections and slow
++  commands worth tracking. Stairs span 5-25 cm, terrain levels move with
++  ``terrain_levels_tracked``, and the swing height target rises with the riser
++  height. After a stop the robot is pulled toward its default pose on level
++  ground only, and gets 1 s to settle its feet before joint motion and lifted
++  feet are charged. A light ``motor_heat_l2`` term with ``threshold=1.0`` charges
++  heating above the J60 rating, PPO adds left-right mirrored samples, and the
++  entropy coefficient is 0.003 for fine-tuning. Actor observations match
++  StairYaw-J60, so its checkpoints can be resumed directly.
++
++- Added ``symmetry_cfg`` to ``RslRlPpoAlgorithmCfg`` for rsl_rl symmetry data
++  augmentation and mirror loss, and the G23 mirror function
++  ``mjlab.tasks.velocity.config.g23.symmetry:mirror_g23_velocity``.
++
++- Added velocity command options ``directional_heading_hold`` and
++  ``stationary_command_threshold``. The command now tracks ``stationary_time`` and
++  each episode's commanded path and progress, used by the new
++  ``terrain_levels_tracked`` curriculum and the ``settle_time_s`` option of the
++  standing rewards. ``standing_joint_deviation_l2`` can also be limited to level
++  ground with ``foot_height_sensor_name``.
++
+ - Added ``Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw-J60``, which
+   limits G23 joint torque to the J60 torque-speed curve (peak 19.94 / 30.5 Nm,
+   no-load 24.18 / 15.49 rad/s, with J60 rotor inertia), raises the stair heading
+@@ -77,6 +102,10 @@ Changed
+ Fixed
+ ^^^^^
+ 
++- Velocity tasks no longer share sub-terrain configs. Tuning applied by one robot
++  (for example the G23 stair heights and terrain proportions) previously leaked
++  into every other registered rough task, including Unitree G1 and Go1.
++
+ - Preserved the scheduled support pair through a transient contact-sensor gap
+   at the G23 RL-MPC TROT-to-STOPPING boundary, while confirmed STAND contact
+   losses still enter recovery immediately.
+diff --git a/src/mjlab/rl/config.py b/src/mjlab/rl/config.py
+index 8ce233d..2096452 100644
+--- a/src/mjlab/rl/config.py
++++ b/src/mjlab/rl/config.py
+@@ -77,6 +77,17 @@ class RslRlPpoAlgorithmCfg:
+   """The optimizer to use."""
+   share_cnn_encoders: bool = False
+   """Share CNN encoders between actor and critic."""
++  symmetry_cfg: dict[str, Any] | None = None
++  """Symmetry augmentation config passed to ``rsl_rl.extensions.Symmetry``. Example::
++
++    {"data_augmentation_func": "my.module:mirror_fn",
++     "use_data_augmentation": True,
++     "use_mirror_loss": False, "mirror_loss_coeff": 0.0}
++
++  ``data_augmentation_func(env, obs, actions)`` returns the inputs followed by
++  their mirrored copies along the batch dimension (either may be None).
++  ``None`` disables symmetry.
++  """
+   class_name: str = "PPO"
+   """Algorithm class name resolved by RSL-RL."""
+ 
+diff --git a/src/mjlab/rl/runner.py b/src/mjlab/rl/runner.py
+index bbd6bb6..1fc82ad 100644
+--- a/src/mjlab/rl/runner.py
++++ b/src/mjlab/rl/runner.py
+@@ -32,6 +32,10 @@ class MjlabOnPolicyRunner(OnPolicyRunner):
+         if train_cfg[key].get("rnn_type") is None:
+           for opt in ("rnn_type", "rnn_hidden_dim", "rnn_num_layers"):
+             train_cfg[key].pop(opt, None)
++    # Only PPO accepts symmetry_cfg; drop it when unused so other algorithms work.
++    algorithm = train_cfg.get("algorithm", {})
++    if algorithm.get("symmetry_cfg") is None:
++      algorithm.pop("symmetry_cfg", None)
+     super().__init__(env, train_cfg, log_dir, device)
+ 
+   def export_policy_to_onnx(
+diff --git a/src/mjlab/tasks/velocity/config/g23/__init__.py b/src/mjlab/tasks/velocity/config/g23/__init__.py
+index aa2f6af..6a2fda1 100644
+--- a/src/mjlab/tasks/velocity/config/g23/__init__.py
++++ b/src/mjlab/tasks/velocity/config/g23/__init__.py
+@@ -7,6 +7,7 @@ from .env_cfgs import (
+   syncai_g23_rough_env_cfg,
+   syncai_g23_rough_proprio_env_cfg,
+   syncai_g23_rough_proprio_history6_env_cfg,
++  syncai_g23_rough_proprio_history6_stair_goals_env_cfg,
+   syncai_g23_rough_proprio_history6_stair_yaw_env_cfg,
+   syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg,
+ )
+@@ -66,6 +67,23 @@ register_mjlab_task(
+   runner_cls=VelocityOnPolicyRunner,
+ )
+ 
++# 2026-10-16 stair-goals update: J60 StairYaw plus heading-hold straight commands,
++# 5-25 cm stairs with a command-following curriculum, riser-scaled foot clearance,
++# stance settling, an above-rating heating penalty, and left-right symmetry
++# augmentation. Shares the experiment so StairYaw and J60 runs can resume.
++register_mjlab_task(
++  task_id="Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-J60-StairGoals",
++  env_cfg=syncai_g23_rough_proprio_history6_stair_goals_env_cfg(),
++  play_env_cfg=syncai_g23_rough_proprio_history6_stair_goals_env_cfg(play=True),
++  # Lower entropy while fine-tuning: the first run's action std grew 0.43 -> 0.59.
++  rl_cfg=syncai_g23_ppo_runner_cfg(
++    experiment_name="g23_velocity_proprio_history6",
++    symmetry=True,
++    entropy_coef=0.003,
++  ),
++  runner_cls=VelocityOnPolicyRunner,
++)
++
+ register_mjlab_task(
+   task_id="Mjlab-Velocity-Flat-SyncAI-G23-Proprio",
+   env_cfg=syncai_g23_flat_proprio_env_cfg(),
+diff --git a/src/mjlab/tasks/velocity/config/g23/env_cfgs.py b/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+index 48eb0f4..113af70 100644
+--- a/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
++++ b/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+@@ -77,6 +77,36 @@ _G23_STAIR_HEADING_DEVIATION_WEIGHT = -2.0
+ # torque-speed curve and penalizes heating relative to the rated torque.
+ _G23_J60_STAIR_HEADING_DEVIATION_WEIGHT = -10.0
+ _G23_MOTOR_HEAT_WEIGHT = -0.03
++# 2026-10-16 stair-goals update: changes from the goal evaluation in
++# analysis/g23_goals_20261016. Straight segments hold their heading through
++# ang_vel_z at the deployment gain; a narrow yaw-rate kernel rewards the small
++# corrections that the sqrt(0.5) kernel ignored.
++_G23_GOALS_HEADING_STIFFNESS = 3.0
++_G23_GOALS_FINE_YAW_STD = 0.15
++# 2026-10-16 stair-goals v2: the first StairGoals run learned to stop short of the
++# first riser at 0.3 m/s (analysis/g23_goals_20261016/reward_attribution.py). A
++# narrow speed kernel makes ignoring a slow command cost more than what standing
++# still earns through pose, upright, heating and yaw terms.
++_G23_GOALS_FINE_YAW_WEIGHT = 0.5
++_G23_GOALS_FINE_LIN_STD = 0.2
++_G23_GOALS_FINE_LIN_WEIGHT = 2.0
++# 20 cm risers sat on the top level and were rarely trained; extend to 25 cm.
++_G23_GOALS_STAIR_STEP_HEIGHT_RANGE = (0.05, 0.25)
++# Swing target = riser + margin on stairs (0.16 m floor, 0.24 m cap).
++_G23_GOALS_STAIR_CLEARANCE_MARGIN = 0.04
++_G23_GOALS_MAX_FOOT_CLEARANCE = 0.24
++# Stopping: pull toward the default pose on level ground only (it cannot be held
++# across stair treads, and charging it there taught the policy to avoid stairs),
++# and give the feet a settling window before joint motion and lifted feet count.
++_G23_GOALS_REL_STANDING_ENVS = 0.2
++_G23_GOALS_STANDING_SETTLE_TIME = 1.0
++_G23_GOALS_STANDING_DEVIATION_SETTLE_TIME = 0.5
++_G23_GOALS_STANDING_DEVIATION_WEIGHT = -20.0
++_G23_GOALS_STANDING_LEVEL_TOLERANCE = 0.03
++_G23_GOALS_STANDING_VELOCITY_WEIGHT = -0.05
++# Charge only the heating above each motor's continuous rating; -0.1 made slowing
++# down or not climbing pay off, so keep it a mild nudge next to motor_heat.
++_G23_GOALS_MOTOR_HEAT_EXCESS_WEIGHT = -0.02
+ 
+ _G23_PROPRIO_TERM_ORDER = (
+   "base_ang_vel",
+@@ -665,6 +695,86 @@ def syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg(
+   return cfg
+ 
+ 
++def syncai_g23_rough_proprio_history6_stair_goals_env_cfg(
++  play: bool = False,
++) -> ManagerBasedRlEnvCfg:
++  """J60 StairYaw task tuned for the heading, 20 cm, stance and heating goals."""
++  cfg = syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg(play=play)
++  # Actor observations are unchanged, so StairYaw/J60 checkpoints fine-tune here.
++
++  twist = cfg.commands["twist"]
++  assert isinstance(twist, UniformVelocityCommandCfg)
++  twist.directional_heading_hold = True
++  twist.heading_control_stiffness = _G23_GOALS_HEADING_STIFFNESS
++  twist.rel_standing_envs = _G23_GOALS_REL_STANDING_ENVS
++  cfg.rewards["track_yaw_rate_fine"] = RewardTermCfg(
++    func=mdp.track_angular_velocity_yaw,
++    weight=_G23_GOALS_FINE_YAW_WEIGHT,
++    params={"command_name": "twist", "std": _G23_GOALS_FINE_YAW_STD},
++  )
++  cfg.rewards["track_linear_velocity_fine"] = RewardTermCfg(
++    func=mdp.track_linear_velocity_xy,
++    weight=_G23_GOALS_FINE_LIN_WEIGHT,
++    params={"command_name": "twist", "std": _G23_GOALS_FINE_LIN_STD},
++  )
++
++  terrain = cfg.scene.terrain
++  assert terrain is not None and terrain.terrain_generator is not None
++  for stair_name in _G23_STAIR_TERRAIN_NAMES:
++    stair = cast(Any, terrain.terrain_generator.sub_terrains[stair_name])
++    stair.step_height_range = _G23_GOALS_STAIR_STEP_HEIGHT_RANGE
++  if "terrain_levels" in cfg.curriculum:
++    cfg.curriculum["terrain_levels"] = CurriculumTermCfg(
++      func=mdp.terrain_levels_tracked,
++      params={"command_name": "twist"},
++    )
++  for reward_name, func in (
++    ("foot_clearance", mdp.feet_clearance_stair_adaptive),
++    ("foot_swing_height", mdp.feet_swing_height_stair_adaptive),
++  ):
++    clearance = cfg.rewards[reward_name]
++    clearance.func = func
++    clearance.params.update(
++      terrain_names=_G23_STAIR_TERRAIN_NAMES,
++      step_height_margin=_G23_GOALS_STAIR_CLEARANCE_MARGIN,
++      max_target_height=_G23_GOALS_MAX_FOOT_CLEARANCE,
++    )
++
++  cfg.rewards["standing_joint_deviation"] = RewardTermCfg(
++    func=mdp.standing_joint_deviation_l2,
++    weight=_G23_GOALS_STANDING_DEVIATION_WEIGHT,
++    params={
++      "command_name": "twist",
++      "settle_time_s": _G23_GOALS_STANDING_DEVIATION_SETTLE_TIME,
++      "foot_height_sensor_name": "foot_height_scan",
++      "level_tolerance": _G23_GOALS_STANDING_LEVEL_TOLERANCE,
++    },
++  )
++  cfg.rewards["standing_joint_velocity"] = RewardTermCfg(
++    func=mdp.standing_joint_velocity_l2,
++    weight=_G23_GOALS_STANDING_VELOCITY_WEIGHT,
++    params={
++      "command_name": "twist",
++      "settle_time_s": _G23_GOALS_STANDING_SETTLE_TIME,
++    },
++  )
++  cfg.rewards["standing_missing_foot_contacts"].params["settle_time_s"] = (
++    _G23_GOALS_STANDING_SETTLE_TIME
++  )
++
++  cfg.rewards["motor_heat_excess"] = RewardTermCfg(
++    func=mdp.motor_heat_l2,
++    weight=_G23_GOALS_MOTOR_HEAT_EXCESS_WEIGHT,
++    params={"rated_torque": G23_J60_RATED_TORQUE, "threshold": 1.0},
++  )
++
++  # Mirror augmentation needs contact forces in the base frame; the critic keeps
++  # its dimensions, so its checkpoint weights still load.
++  forces = cfg.observations["critic"].terms["foot_contact_forces"]
++  forces.func = mdp.foot_contact_forces_b
++  return cfg
++
++
+ def syncai_g23_flat_stand_history6_env_cfg(
+   play: bool = False,
+ ) -> ManagerBasedRlEnvCfg:
+diff --git a/src/mjlab/tasks/velocity/config/g23/rl_cfg.py b/src/mjlab/tasks/velocity/config/g23/rl_cfg.py
+index b7cba33..b61adcd 100644
+--- a/src/mjlab/tasks/velocity/config/g23/rl_cfg.py
++++ b/src/mjlab/tasks/velocity/config/g23/rl_cfg.py
+@@ -1,16 +1,35 @@
+ """RL configuration for SyncAI G23 velocity task."""
+ 
++from typing import Any
++
+ from mjlab.rl import (
+   RslRlModelCfg,
+   RslRlOnPolicyRunnerCfg,
+   RslRlPpoAlgorithmCfg,
+ )
+ 
++# 2026-10-16 stair-goals update: left-right mirror augmentation for PPO.
++G23_SYMMETRY_FUNC = "mjlab.tasks.velocity.config.g23.symmetry:mirror_g23_velocity"
++
++
++def _g23_symmetry_cfg() -> dict[str, Any]:
++  return {
++    "data_augmentation_func": G23_SYMMETRY_FUNC,
++    "use_data_augmentation": True,
++    "use_mirror_loss": False,
++    "mirror_loss_coeff": 0.0,
++  }
++
+ 
+ def syncai_g23_ppo_runner_cfg(
+   experiment_name: str = "g23_velocity",
++  symmetry: bool = False,
++  entropy_coef: float = 0.01,
+ ) -> RslRlOnPolicyRunnerCfg:
+-  """Create RL runner configuration for SyncAI G23 velocity task."""
++  """Create RL runner configuration for SyncAI G23 velocity task.
++
++  ``symmetry`` adds left-right mirrored samples to every PPO mini-batch.
++  """
+   return RslRlOnPolicyRunnerCfg(
+     actor=RslRlModelCfg(
+       hidden_dims=(512, 256, 128),
+@@ -31,7 +50,7 @@ def syncai_g23_ppo_runner_cfg(
+       value_loss_coef=1.0,
+       use_clipped_value_loss=True,
+       clip_param=0.2,
+-      entropy_coef=0.01,
++      entropy_coef=entropy_coef,
+       num_learning_epochs=5,
+       num_mini_batches=4,
+       learning_rate=1.0e-3,
+@@ -40,6 +59,7 @@ def syncai_g23_ppo_runner_cfg(
+       lam=0.95,
+       desired_kl=0.01,
+       max_grad_norm=1.0,
++      symmetry_cfg=_g23_symmetry_cfg() if symmetry else None,
+     ),
+     experiment_name=experiment_name,
+     # Keep raw policy actions and the actor's previous-action observation bounded.
+diff --git a/src/mjlab/tasks/velocity/mdp/curriculums.py b/src/mjlab/tasks/velocity/mdp/curriculums.py
+index 24bafc4..3c9cc27 100644
+--- a/src/mjlab/tasks/velocity/mdp/curriculums.py
++++ b/src/mjlab/tasks/velocity/mdp/curriculums.py
+@@ -20,6 +20,9 @@ from .velocity_command import (
+ if TYPE_CHECKING:
+   from mjlab.envs import ManagerBasedRlEnv
+   from mjlab.managers.curriculum_manager import CurriculumTermCfg
++  from mjlab.terrains import TerrainEntity
++
++  from .velocity_command import UniformVelocityCommand
+ 
+ _DEFAULT_SCENE_CFG = SceneEntityCfg("robot")
+ 
+@@ -95,8 +98,65 @@ def terrain_levels_vel(
+ 
+   # Update terrain levels.
+   terrain.update_env_origins(env_ids, move_up, move_down)
++  return _terrain_level_summary(terrain)
++
++
++# 2026-10-16 stair-goals update: promote on demonstrated command following instead
++# of raw distance, so random standing, turning, or reversing commands neither block
++# promotion nor force demotion.
++def terrain_levels_tracked(
++  env: ManagerBasedRlEnv,
++  env_ids: torch.Tensor,
++  command_name: str,
++  min_command_distance: float = 2.0,
++  promote_ratio: float = 0.8,
++  demote_ratio: float = 0.5,
++  asset_cfg: SceneEntityCfg = _DEFAULT_SCENE_CFG,
++) -> dict[str, torch.Tensor]:
++  """Move terrain levels by how well the robot followed its commanded path.
++
++  An env that was not terminated is promoted when it left its sub-terrain, as in
++  :func:`terrain_levels_vel`, or when it was commanded at least
++  ``min_command_distance`` meters of planar travel and covered ``promote_ratio`` of
++  that path. A terminated env is demoted, and so is one that covered less than
++  ``demote_ratio`` of such a path. Episodes with shorter commanded paths (mostly
++  standing or turning) keep their level.
++  """
++  asset: Entity = env.scene[asset_cfg.name]
++  terrain = env.scene.terrain
++  assert terrain is not None
++  terrain_generator = terrain.cfg.terrain_generator
++  assert terrain_generator is not None
++  command_term = cast(
++    "UniformVelocityCommand", env.command_manager.get_term(command_name)
++  )
++
++  distance = torch.norm(
++    asset.data.root_link_pos_w[env_ids, :2] - env.scene.env_origins[env_ids, :2],
++    dim=1,
++  )
++  path, progress = command_term.get_command_progress(env_ids)
++  ratio = progress / path.clamp(min=1e-6)
++  evaluated = path >= min_command_distance
++  failed = env.termination_manager.terminated[env_ids]
++
++  left_terrain = distance > terrain_generator.size[0] / 2
++  move_up = ~failed & (left_terrain | (evaluated & (ratio >= promote_ratio)))
++  move_down = ~move_up & (failed | (evaluated & (ratio < demote_ratio)))
++
++  # See terrain_levels_vel: the initial reset happens at the spawn pose.
++  if env.common_step_counter == 0:
++    move_up = torch.zeros_like(move_up)
++    move_down = torch.zeros_like(move_down)
++
++  terrain.update_env_origins(env_ids, move_up, move_down)
++  return _terrain_level_summary(terrain)
+ 
+-  # Compute per-terrain-type mean levels.
++
++def _terrain_level_summary(terrain: TerrainEntity) -> dict[str, torch.Tensor]:
++  """Return overall and per-terrain-type mean levels."""
++  terrain_generator = terrain.cfg.terrain_generator
++  assert terrain_generator is not None
+   levels = terrain.terrain_levels.float()
+   result: dict[str, torch.Tensor] = {
+     "mean": torch.mean(levels),
+diff --git a/src/mjlab/tasks/velocity/mdp/observations.py b/src/mjlab/tasks/velocity/mdp/observations.py
+index 6275d43..35aeaee 100644
+--- a/src/mjlab/tasks/velocity/mdp/observations.py
++++ b/src/mjlab/tasks/velocity/mdp/observations.py
+@@ -4,12 +4,17 @@ from typing import TYPE_CHECKING
+ 
+ import torch
+ 
++from mjlab.entity import Entity
++from mjlab.managers.scene_entity_config import SceneEntityCfg
+ from mjlab.sensor import ContactSensor
+ from mjlab.sensor.terrain_height_sensor import TerrainHeightSensor
++from mjlab.utils.lab_api.math import quat_apply_inverse
+ 
+ if TYPE_CHECKING:
+   from mjlab.envs import ManagerBasedRlEnv
+ 
++_DEFAULT_ASSET_CFG = SceneEntityCfg("robot")
++
+ 
+ def foot_height(env: ManagerBasedRlEnv, sensor_name: str) -> torch.Tensor:
+   """Per-foot vertical clearance above terrain.
+@@ -45,3 +50,23 @@ def foot_contact_forces(env: ManagerBasedRlEnv, sensor_name: str) -> torch.Tenso
+   assert sensor_data.force is not None
+   forces_flat = sensor_data.force.flatten(start_dim=1)  # [B, N*3]
+   return torch.sign(forces_flat) * torch.log1p(torch.abs(forces_flat))
++
++
++# 2026-10-16 stair-goals update: world-frame contact forces cannot be mirrored
++# about the robot's sagittal plane without its heading; body-frame forces can.
++def foot_contact_forces_b(
++  env: ManagerBasedRlEnv,
++  sensor_name: str,
++  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++) -> torch.Tensor:
++  """Log-scaled per-foot contact forces in the base frame, shape ``[B, F*3]``.
++
++  Requires a sensor that reports global-frame forces (``reduce="netforce"``).
++  """
++  sensor: ContactSensor = env.scene[sensor_name]
++  assert sensor.data.force is not None
++  asset: Entity = env.scene[asset_cfg.name]
++  forces_w = sensor.data.force  # [B, F, 3]
++  quat = asset.data.root_link_quat_w.unsqueeze(1).expand(-1, forces_w.shape[1], -1)
++  forces_b = quat_apply_inverse(quat, forces_w).flatten(start_dim=1)
++  return torch.sign(forces_b) * torch.log1p(torch.abs(forces_b))
+diff --git a/src/mjlab/tasks/velocity/mdp/rewards.py b/src/mjlab/tasks/velocity/mdp/rewards.py
+index 7ed6000..71b482c 100644
+--- a/src/mjlab/tasks/velocity/mdp/rewards.py
++++ b/src/mjlab/tasks/velocity/mdp/rewards.py
+@@ -13,6 +13,7 @@ from mjlab.sensor import BuiltinSensor, ContactSensor
+ from mjlab.sensor.terrain_height_sensor import TerrainHeightSensor
+ from mjlab.tasks.velocity.mdp.terrain_utils import (
+   terrain_normal_from_sensors,
++  terrain_step_height_lookup,
+   terrain_type_lookup,
+ )
+ from mjlab.utils.lab_api.math import quat_apply, quat_apply_inverse, wrap_to_pi
+@@ -100,19 +101,56 @@ def track_angular_velocity_yaw(
+   return torch.exp(-error / std**2)
+ 
+ 
++def _settled(
++  env: ManagerBasedRlEnv, command_name: str, settle_time_s: float
++) -> torch.Tensor | None:
++  """Mask envs whose command has been stationary for ``settle_time_s``.
++
++  Returns None when no settling time is requested. Requires a command term that
++  tracks ``stationary_time`` (see ``UniformVelocityCommand``).
++  """
++  if settle_time_s <= 0.0:
++    return None
++  term = env.command_manager.get_term(command_name)
++  stationary_time = getattr(term, "stationary_time", None)
++  if not isinstance(stationary_time, torch.Tensor):
++    raise TypeError(
++      f"settle_time_s needs command '{command_name}' to track stationary_time."
++    )
++  return stationary_time >= settle_time_s
++
++
+ def standing_joint_deviation_l2(
+   env: ManagerBasedRlEnv,
+   command_name: str,
+   command_threshold: float = 0.05,
++  settle_time_s: float = 0.0,
++  foot_height_sensor_name: str | None = None,
++  level_tolerance: float = 0.03,
+   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+ ) -> torch.Tensor:
+-  """Penalize deviation from the default joint pose only at zero command."""
++  """Penalize deviation from the default joint pose only at zero command.
++
++  With ``settle_time_s`` the penalty starts once the command has been stationary
++  that long. With ``foot_height_sensor_name`` (a per-foot TerrainHeightSensor) it
++  applies only while the ground under all feet lies within ``level_tolerance``
++  meters, since the default pose cannot be held across stair treads.
++  """
+   asset: Entity = env.scene[asset_cfg.name]
+   command = env.command_manager.get_command(command_name)
+   assert command is not None
+   standing = (
+     torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2]) <= command_threshold
+   )
++  settled = _settled(env, command_name, settle_time_s)
++  if settled is not None:
++    standing = standing & settled
++  if foot_height_sensor_name is not None:
++    sensor = env.scene[foot_height_sensor_name]
++    assert isinstance(sensor, TerrainHeightSensor)
++    ground = sensor.data.frame_pos_w[..., 2] - sensor.data.heights  # [B, F]
++    spread = ground.max(dim=1).values - ground.min(dim=1).values
++    standing = standing & (spread <= level_tolerance)
+   error = (
+     asset.data.joint_pos[:, asset_cfg.joint_ids]
+     - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+@@ -124,15 +162,23 @@ def standing_joint_velocity_l2(
+   env: ManagerBasedRlEnv,
+   command_name: str,
+   command_threshold: float = 0.05,
++  settle_time_s: float = 0.0,
+   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+ ) -> torch.Tensor:
+-  """Suppress joint motion at zero command without penalizing walking."""
++  """Suppress joint motion at zero command without penalizing walking.
++
++  With ``settle_time_s`` the penalty starts once the command has been stationary
++  that long, leaving time for corrective steps after stopping.
++  """
+   asset: Entity = env.scene[asset_cfg.name]
+   command = env.command_manager.get_command(command_name)
+   assert command is not None
+   standing = (
+     torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2]) <= command_threshold
+   )
++  settled = _settled(env, command_name, settle_time_s)
++  if settled is not None:
++    standing = standing & settled
+   return (
+     torch.sum(torch.square(asset.data.joint_vel[:, asset_cfg.joint_ids]), dim=1)
+     * standing
+@@ -218,6 +264,8 @@ class motor_heat_l2:
+   Copper loss scales with torque squared, so each actuator contributes its heating
+   relative to its continuous rating (1.0 = rated load). ``rated_torque`` maps
+   actuator-name regexes to rated torques; every actuator must match one entry.
++  With ``threshold`` each actuator only contributes the load above that level, so
++  ``threshold=1.0`` charges just the heating beyond the continuous rating.
+   """
+ 
+   def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
+@@ -236,12 +284,14 @@ class motor_heat_l2:
+     self,
+     env: ManagerBasedRlEnv,
+     rated_torque: dict[str, float],
++    threshold: float = 0.0,
+     asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+   ) -> torch.Tensor:
+     del rated_torque  # Resolved in __init__.
+     asset: Entity = env.scene[asset_cfg.name]
+     torque = asset.data.actuator_force
+-    return torch.sum(torch.square(torque) * self._inv_rated_sq, dim=1)
++    load = torch.square(torque) * self._inv_rated_sq
++    return torch.sum(torch.clamp(load - threshold, min=0.0), dim=1)
+ 
+ 
+ class upright:
+@@ -485,12 +535,15 @@ def feet_contact_count_standing(
+   command_name: str,
+   required_contacts: int,
+   command_threshold: float = 0.05,
++  settle_time_s: float = 0.0,
+ ) -> torch.Tensor:
+   """Penalize missing foot contacts while the commanded motion is stationary.
+ 
+   ``found`` is a per-contact-slot tensor.  Sensors with multiple slots per
+   primary are reduced using an any-slot rule before contacts are counted, so a
+-  foot can contribute at most one contact regardless of ``num_slots``.
++  foot can contribute at most one contact regardless of ``num_slots``.  With
++  ``settle_time_s`` the penalty starts once the command has been stationary that
++  long, so the robot may lift a foot to correct its stance right after stopping.
+   """
+   if isinstance(required_contacts, bool) or not isinstance(required_contacts, int):
+     raise TypeError(
+@@ -524,6 +577,9 @@ def feet_contact_count_standing(
+ 
+   command_magnitude = torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2])
+   standing = command_magnitude <= command_threshold
++  settled = _settled(env, command_name, settle_time_s)
++  if settled is not None:
++    standing = standing & settled
+   contact_count = torch.sum(in_contact, dim=1)
+   missing = torch.clamp(required_contacts - contact_count, min=0).to(command.dtype)
+   cost = missing * standing.to(command.dtype)
+@@ -579,7 +635,7 @@ def _contact_metric_name(primary_name: str, primary_idx: int) -> str:
+ 
+ def feet_clearance(
+   env: ManagerBasedRlEnv,
+-  target_height: float,
++  target_height: float | torch.Tensor,
+   height_sensor_name: str,
+   command_name: str | None = None,
+   command_threshold: float = 0.01,
+@@ -626,7 +682,7 @@ class feet_swing_height:
+     env: ManagerBasedRlEnv,
+     sensor_name: str,
+     height_sensor_name: str,
+-    target_height: float,
++    target_height: float | torch.Tensor,
+     command_name: str,
+     command_threshold: float,
+   ) -> torch.Tensor:
+@@ -667,6 +723,97 @@ class feet_swing_height:
+     self.peak_heights[env_ids] = 0.0
+ 
+ 
++# 2026-10-16 stair-goals update: a fixed swing target sits below the tallest
++# risers, so raise it with the riser height of the env's current stair patch.
++class _StairClearanceTarget:
++  """Per-env clearance target: ``step height + margin``, clamped to a range.
++
++  Envs off ``terrain_names`` (and all envs without curriculum terrain) use the
++  base target.
++  """
++
++  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
++    params = cfg.params
++    if params["max_target_height"] < params["target_height"]:
++      raise ValueError("max_target_height must not be below target_height.")
++    self._lookup = terrain_step_height_lookup(env, params["terrain_names"])
++
++  def target(
++    self,
++    env: ManagerBasedRlEnv,
++    target_height: float,
++    step_height_margin: float,
++    max_target_height: float,
++  ) -> float | torch.Tensor:
++    if self._lookup is None:
++      return target_height
++    terrain = env.scene.terrain
++    assert terrain is not None
++    step_height = self._lookup[terrain.terrain_levels, terrain.terrain_types]
++    target = torch.clamp(
++      step_height + step_height_margin, min=target_height, max=max_target_height
++    )
++    return target.unsqueeze(1)
++
++
++class feet_clearance_stair_adaptive:
++  """:func:`feet_clearance` with a target raised on tall stair risers."""
++
++  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
++    self._target = _StairClearanceTarget(cfg, env)
++
++  def __call__(
++    self,
++    env: ManagerBasedRlEnv,
++    target_height: float,
++    height_sensor_name: str,
++    terrain_names: tuple[str, ...],
++    step_height_margin: float,
++    max_target_height: float,
++    command_name: str | None = None,
++    command_threshold: float = 0.01,
++    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++  ) -> torch.Tensor:
++    del terrain_names  # Resolved in __init__.
++    target = self._target.target(
++      env, target_height, step_height_margin, max_target_height
++    )
++    return feet_clearance(
++      env, target, height_sensor_name, command_name, command_threshold, asset_cfg
++    )
++
++
++class feet_swing_height_stair_adaptive:
++  """:class:`feet_swing_height` with a target raised on tall stair risers."""
++
++  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
++    self._swing = feet_swing_height(cfg, env)
++    self._target = _StairClearanceTarget(cfg, env)
++
++  def __call__(
++    self,
++    env: ManagerBasedRlEnv,
++    sensor_name: str,
++    height_sensor_name: str,
++    target_height: float,
++    terrain_names: tuple[str, ...],
++    step_height_margin: float,
++    max_target_height: float,
++    command_name: str,
++    command_threshold: float,
++  ) -> torch.Tensor:
++    del terrain_names  # Resolved in __init__.
++    target = self._target.target(
++      env, target_height, step_height_margin, max_target_height
++    )
++    return self._swing(
++      env, sensor_name, height_sensor_name, target, command_name, command_threshold
++    )
++
++  def reset(self, env_ids: torch.Tensor) -> None:
++    self._swing.reset(env_ids)
++
++
+ def feet_slip(
+   env: ManagerBasedRlEnv,
+   sensor_name: str,
+diff --git a/src/mjlab/tasks/velocity/mdp/terrain_utils.py b/src/mjlab/tasks/velocity/mdp/terrain_utils.py
+index c67e148..cc09140 100644
+--- a/src/mjlab/tasks/velocity/mdp/terrain_utils.py
++++ b/src/mjlab/tasks/velocity/mdp/terrain_utils.py
+@@ -145,3 +145,40 @@ def terrain_type_lookup(
+   if not generator.curriculum:
+     return None
+   return torch.tensor([name in terrain_names for name in type_names], device=env.device)
++
++
++def terrain_step_height_lookup(
++  env: ManagerBasedRlEnv, terrain_names: tuple[str, ...]
++) -> torch.Tensor | None:
++  """Return the riser height of every curriculum patch, or None if unknown.
++
++  The result has shape ``[num_rows, num_cols]``: ``lookup[levels, types]`` gives
++  each env's step height on ``terrain_names`` and 0 elsewhere. Each named
++  sub-terrain must define ``step_height_range``. Random-grid terrain (play mode)
++  and planes have no per-env level, so callers then fall back to a default.
++  """
++  terrain = env.scene.terrain
++  if terrain is None or terrain.terrain_origins is None:
++    return None
++  generator = terrain.cfg.terrain_generator
++  assert generator is not None
++  type_names = tuple(generator.sub_terrains)
++  unknown = set(terrain_names) - set(type_names)
++  if unknown:
++    raise ValueError(f"Unknown terrain names: {sorted(unknown)}.")
++  if not generator.curriculum:
++    return None
++  num_rows = generator.num_rows
++  lower, upper = generator.difficulty_range
++  lookup = torch.zeros(num_rows, len(type_names), device=env.device)
++  for col, name in enumerate(type_names):
++    if name not in terrain_names:
++      continue
++    step_range = getattr(generator.sub_terrains[name], "step_height_range", None)
++    if step_range is None:
++      raise ValueError(f"Sub-terrain '{name}' has no step_height_range.")
++    for row in range(num_rows):
++      # Matches TerrainGenerator._generate_curriculum_terrains.
++      difficulty = lower + (upper - lower) * row / max(num_rows - 1, 1)
++      lookup[row, col] = step_range[0] + difficulty * (step_range[1] - step_range[0])
++  return lookup
+diff --git a/src/mjlab/tasks/velocity/mdp/velocity_command.py b/src/mjlab/tasks/velocity/mdp/velocity_command.py
+index f06c93e..bcafb66 100644
+--- a/src/mjlab/tasks/velocity/mdp/velocity_command.py
++++ b/src/mjlab/tasks/velocity/mdp/velocity_command.py
+@@ -51,6 +51,8 @@ class UniformVelocityCommand(CommandTerm):
+     _validate_directional_bucket_fractions(
+       self.cfg.rel_forward_envs, self.cfg.rel_backward_envs
+     )
++    if self.cfg.directional_heading_hold and not self.cfg.heading_command:
++      raise ValueError("directional_heading_hold=True requires heading_command=True.")
+ 
+     self.robot: Entity = env.scene[cfg.entity_name]
+ 
+@@ -82,6 +84,17 @@ class UniformVelocityCommand(CommandTerm):
+       self.num_envs, dtype=torch.long, device=self.device
+     )
+ 
++    # 2026-10-16 stair-goals update: directional heading-hold envs latch their
++    # target heading on the next command update, after kinematics are current.
++    self._latch_heading = torch.zeros_like(self.is_heading_env)
++    # Seconds the command has stayed stationary; standing rewards use it to give
++    # the robot time to settle its feet before they apply.
++    self.stationary_time = torch.zeros(self.num_envs, device=self.device)
++    # Per-episode commanded planar path length and the part of it the robot
++    # actually covered, both in meters. Terrain curricula read these at reset.
++    self._command_path = torch.zeros(self.num_envs, device=self.device)
++    self._command_progress = torch.zeros(self.num_envs, device=self.device)
++
+     # Set by create_gui() when the viewer is active.
+     self._joystick_enabled: viser.GuiCheckboxHandle | None = None
+     self._joystick_sliders: list[viser.GuiSliderHandle] = []
+@@ -209,6 +222,17 @@ class UniformVelocityCommand(CommandTerm):
+       "backward_tracking_count": self._backward_tracking_count[env_ids],
+     }
+ 
++  def get_command_progress(
++    self, env_ids: torch.Tensor
++  ) -> tuple[torch.Tensor, torch.Tensor]:
++    """Return the episode's commanded planar path and the progress made along it.
++
++    Progress integrates the body-frame planar velocity projected onto the commanded
++    direction, capped at the commanded speed, so it never exceeds the path. Like
++    the directional statistics, the values survive until the command resets.
++    """
++    return self._command_path[env_ids], self._command_progress[env_ids]
++
+   # 2026-09-02 stair-training update: a resumed curriculum may restore a
+   # later command stage after the environment's initial stage-0 reset.
+   def resample_after_curriculum_restore(self) -> None:
+@@ -218,6 +242,8 @@ class UniformVelocityCommand(CommandTerm):
+     self._forward_tracking_count.zero_()
+     self._backward_tracking_sum.zero_()
+     self._backward_tracking_count.zero_()
++    self._command_path.zero_()
++    self._command_progress.zero_()
+     self._resample(env_ids)
+     self._update_command(env_ids)
+     self._apply_manual_commands()
+@@ -249,6 +275,24 @@ class UniformVelocityCommand(CommandTerm):
+     self._backward_tracking_sum += tracking_score * backward
+     self._backward_tracking_count += backward
+ 
++  def _accumulate_command_progress(self, dt: float | torch.Tensor) -> None:
++    """Integrate the commanded planar path and the progress made along it."""
++    command_xy = self.vel_command_b[:, :2]
++    speed = torch.norm(command_xy, dim=-1)
++    direction = command_xy / speed.clamp(min=1e-6).unsqueeze(-1)
++    along = torch.sum(self.robot.data.root_link_lin_vel_b[:, :2] * direction, dim=-1)
++    self._command_path += speed * dt
++    self._command_progress += torch.minimum(along, speed) * dt
++
++  def _update_stationary_time(self, dt: float | torch.Tensor) -> None:
++    magnitude = torch.norm(self.vel_command_b[:, :2], dim=1) + torch.abs(
++      self.vel_command_b[:, 2]
++    )
++    stationary = magnitude <= self.cfg.stationary_command_threshold
++    self.stationary_time = torch.where(
++      stationary, self.stationary_time + dt, torch.zeros_like(self.stationary_time)
++    )
++
+   def _resample_command(self, env_ids: torch.Tensor) -> None:
+     r = torch.empty(len(env_ids), device=self.device)
+     self.vel_command_b[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
+@@ -285,6 +329,12 @@ class UniformVelocityCommand(CommandTerm):
+     directional_ids = env_ids[is_forward | is_backward]
+     self.is_heading_env[directional_ids] = False
+     self.is_world_env[directional_ids] = False
++    # 2026-10-16 stair-goals update: optionally steer straight segments back to
++    # their starting heading through ang_vel_z, as a deployed heading hold would.
++    self._latch_heading[env_ids] = False
++    if self.cfg.directional_heading_hold:
++      self.is_heading_env[directional_ids] = True
++      self._latch_heading[directional_ids] = True
+ 
+     fwd_ids = env_ids[is_forward]
+     if len(fwd_ids) > 0:
+@@ -342,6 +392,9 @@ class UniformVelocityCommand(CommandTerm):
+     self._forward_tracking_count[env_ids] = 0
+     self._backward_tracking_sum[env_ids] = 0.0
+     self._backward_tracking_count[env_ids] = 0
++    self._command_path[env_ids] = 0.0
++    self._command_progress[env_ids] = 0.0
++    self.stationary_time[env_ids] = 0.0
+     self._apply_manual_commands()
+     if self.cfg.init_velocity_prob > 0.0:
+       assert isinstance(env_ids, torch.Tensor)
+@@ -360,6 +413,12 @@ class UniformVelocityCommand(CommandTerm):
+     # Pure function of the current state; refreshing all envs is safe.
+     del env_ids
+     if self.cfg.heading_command:
++      # Reset-path resamples run before sim.forward(), when heading_w still holds
++      # the terminal pose; latching here sees the current kinematics.
++      self.heading_target = torch.where(
++        self._latch_heading, self.robot.data.heading_w, self.heading_target
++      )
++      self._latch_heading.zero_()
+       self.heading_error = wrap_to_pi(self.heading_target - self.robot.data.heading_w)
+       heading_ids = self.is_heading_env.nonzero(as_tuple=False).flatten()
+       self.vel_command_b[heading_ids, 2] = torch.clip(
+@@ -449,6 +508,7 @@ class UniformVelocityCommand(CommandTerm):
+     # just-finished step before timer expiry can resample it.  A per-env zero dt
+     # on auto-reset prevents freshly reset environments from adding a fake sample.
+     self._accumulate_directional_tracking(dt)
++    self._accumulate_command_progress(dt)
+     super().compute(dt, env_ids)
+     self._apply_manual_commands()
+     if self._joystick_enabled is not None and self._joystick_enabled.value:
+@@ -456,6 +516,7 @@ class UniformVelocityCommand(CommandTerm):
+       idx = self._joystick_get_env_idx()
+       for i, s in enumerate(self._joystick_sliders):
+         self.vel_command_b[idx, i] = s.value
++    self._update_stationary_time(dt)
+ 
+   # Visualization.
+ 
+@@ -559,6 +620,17 @@ class UniformVelocityCommandCfg(CommandTermCfg):
+   remain unrestricted within ``ranges`` so a trained policy can later be
+   evaluated or fine-tuned with mixed commands.
+   """
++  directional_heading_hold: bool = False
++  """Hold the starting heading in the straight forward/backward buckets.
++
++  Requires ``heading_command``. Directional envs become heading envs whose target
++  is the robot heading when the segment starts, so ``ang_vel_z`` carries the
++  ``heading_control_stiffness`` correction instead of a constant zero. This matches
++  a deployment-side heading hold that turns IMU yaw error into a yaw-rate command.
++  """
++  stationary_command_threshold: float = 0.05
++  """Command magnitude (``|v_xy| + |w_z|``) at or below which the command counts as
++  stationary for ``UniformVelocityCommand.stationary_time``."""
+ 
+   @dataclass
+   class Ranges:
+@@ -583,6 +655,8 @@ class UniformVelocityCommandCfg(CommandTermCfg):
+     _validate_directional_bucket_fractions(
+       self.rel_forward_envs, self.rel_backward_envs
+     )
++    if self.directional_heading_hold and not self.heading_command:
++      raise ValueError("directional_heading_hold=True requires heading_command=True.")
+     if self.heading_command and self.ranges.heading is None:
+       raise ValueError(
+         "The velocity command has heading commands active (heading_command=True) but "
+diff --git a/src/mjlab/tasks/velocity/velocity_env_cfg.py b/src/mjlab/tasks/velocity/velocity_env_cfg.py
+index b4b36b4..1be6ea6 100644
+--- a/src/mjlab/tasks/velocity/velocity_env_cfg.py
++++ b/src/mjlab/tasks/velocity/velocity_env_cfg.py
+@@ -5,7 +5,7 @@ Robot-specific configurations call the factory and customize as needed.
+ """
+ 
+ import math
+-from dataclasses import replace
++from copy import deepcopy
+ 
+ from mjlab.envs import ManagerBasedRlEnvCfg
+ from mjlab.envs import mdp as envs_mdp
+@@ -419,7 +419,9 @@ def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
+     scene=SceneCfg(
+       terrain=TerrainEntityCfg(
+         terrain_type="generator",
+-        terrain_generator=replace(ROUGH_TERRAINS_CFG),
++        # Deep copy: robot configs tune sub-terrains in place, and a shallow copy
++        # would leak one robot's tuning into every other registered task.
++        terrain_generator=deepcopy(ROUGH_TERRAINS_CFG),
+         max_init_terrain_level=5,
+       ),
+       sensors=(terrain_scan, foot_height_scan),
+diff --git a/tests/test_velocity_motor_heat.py b/tests/test_velocity_motor_heat.py
+index 0629251..9bd5a1b 100644
+--- a/tests/test_velocity_motor_heat.py
++++ b/tests/test_velocity_motor_heat.py
+@@ -40,3 +40,13 @@ def test_motor_heat_requires_a_rating_for_every_actuator():
+   cfg = RewardTermCfg(func=mdp.motor_heat_l2, weight=-1.0, params=params)
+   with pytest.raises(ValueError, match="Tail"):
+     mdp.motor_heat_l2(cfg, env)
++
++
++def test_motor_heat_threshold_charges_only_load_above_rating():
++  env = _make_env([[12.0, 3.0, 9.0]])
++  params = {"rated_torque": _RATED, "threshold": 1.0}
++  cfg = RewardTermCfg(func=mdp.motor_heat_l2, weight=-1.0, params=params)
++  reward = mdp.motor_heat_l2(cfg, env)
++  # Loads are 4.0, 0.25 and 1.0 times the rating; only 4.0 exceeds it.
++  loads = reward(env, rated_torque=_RATED, threshold=1.0)
++  torch.testing.assert_close(loads, torch.tensor([3.0]))
+diff --git a/tests/test_velocity_task.py b/tests/test_velocity_task.py
+index 102d921..3fd4b5e 100644
+--- a/tests/test_velocity_task.py
++++ b/tests/test_velocity_task.py
+@@ -1,13 +1,15 @@
+ """Tests specific to velocity tasks."""
+ 
+ from dataclasses import asdict
++from typing import Any, cast
+ 
+ import pytest
+ 
+ from mjlab.actuator import DcMotorActuatorCfg
+ from mjlab.asset_zoo.robots import G1_ACTION_SCALE, G23_ACTION_SCALE, GO1_ACTION_SCALE
+ from mjlab.envs.mdp.actions import JointPositionActionCfg
+-from mjlab.tasks.registry import list_tasks, load_env_cfg
++from mjlab.rl import RslRlOnPolicyRunnerCfg
++from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg
+ from mjlab.tasks.velocity import mdp
+ from mjlab.tasks.velocity.config.g23.rl_cfg import syncai_g23_ppo_runner_cfg
+ from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
+@@ -83,6 +85,63 @@ def test_g23_stair_yaw_j60_limits_torque_and_penalizes_heating():
+   assert "motor_heat" not in base.rewards
+ 
+ 
++def test_g23_stair_goals_extends_j60_for_the_stair_goals():
++  base_id = "Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw-J60"
++  task_id = "Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-J60-StairGoals"
++  base = load_env_cfg(base_id)
++  cfg = load_env_cfg(task_id)
++  # Same actor, and the critic keeps its layout with base-frame contact forces.
++  assert asdict(cfg.observations["actor"]) == asdict(base.observations["actor"])
++  critic = cfg.observations["critic"].terms
++  assert list(critic) == list(base.observations["critic"].terms)
++  assert critic["foot_contact_forces"].func is mdp.foot_contact_forces_b
++  assert asdict(cfg.scene.entities["robot"]) == asdict(base.scene.entities["robot"])
++
++  twist = cfg.commands["twist"]
++  assert isinstance(twist, UniformVelocityCommandCfg)
++  assert twist.directional_heading_hold
++  assert twist.heading_control_stiffness == pytest.approx(3.0)
++  assert twist.rel_standing_envs == pytest.approx(0.2)
++  fine_yaw = cfg.rewards["track_yaw_rate_fine"]
++  assert fine_yaw.func is mdp.track_angular_velocity_yaw
++  assert fine_yaw.params["std"] < cfg.rewards["track_angular_velocity"].params["std"]
++
++  assert cfg.scene.terrain is not None
++  generator = cfg.scene.terrain.terrain_generator
++  assert generator is not None
++  for name in ("pyramid_stairs", "pyramid_stairs_inv"):
++    stairs = cast(Any, generator.sub_terrains[name])
++    assert stairs.step_height_range == (0.05, 0.25)
++  assert list(cfg.curriculum) == ["command_performance", "terrain_levels"]
++  assert cfg.curriculum["terrain_levels"].func is mdp.terrain_levels_tracked
++  assert cfg.rewards["foot_clearance"].func is mdp.feet_clearance_stair_adaptive
++  assert cfg.rewards["foot_swing_height"].func is mdp.feet_swing_height_stair_adaptive
++
++  deviation = cfg.rewards["standing_joint_deviation"]
++  assert deviation.weight < 0.0
++  assert deviation.params["foot_height_sensor_name"] == "foot_height_scan"
++  fine_lin = cfg.rewards["track_linear_velocity_fine"]
++  assert fine_lin.func is mdp.track_linear_velocity_xy
++  assert fine_lin.params["std"] < cfg.rewards["track_linear_velocity"].params["std"]
++  assert cfg.rewards["standing_joint_velocity"].params["settle_time_s"] > 0.0
++  contacts = cfg.rewards["standing_missing_foot_contacts"]
++  assert contacts.params["settle_time_s"] > 0.0
++  heat = cfg.rewards["motor_heat_excess"]
++  assert heat.func is mdp.motor_heat_l2
++  assert heat.weight < 0.0 and heat.params["threshold"] == pytest.approx(1.0)
++  assert "settle_time_s" not in base.rewards["standing_missing_foot_contacts"].params
++
++  play = load_env_cfg(task_id, play=True)
++  assert play.curriculum == {}
++  rl_cfg, base_rl_cfg = load_rl_cfg(task_id), load_rl_cfg(base_id)
++  assert isinstance(rl_cfg, RslRlOnPolicyRunnerCfg)
++  assert isinstance(base_rl_cfg, RslRlOnPolicyRunnerCfg)
++  symmetry_cfg = rl_cfg.algorithm.symmetry_cfg
++  assert symmetry_cfg is not None and symmetry_cfg["use_data_augmentation"]
++  assert rl_cfg.algorithm.entropy_coef == pytest.approx(0.003)
++  assert base_rl_cfg.algorithm.symmetry_cfg is None
++
++
+ @pytest.fixture(scope="module")
+ def velocity_task_ids() -> list[str]:
+   """Get all velocity task IDs."""
+@@ -519,3 +578,19 @@ def test_g23_stair_training_update() -> None:
+   assert push.func is mdp.apply_body_impulse
+   assert push.params["duration_s"] == (0.10, 0.15)
+   assert push.params["cooldown_s"] == (8.0, 12.0)
++
++
++def test_velocity_tasks_do_not_share_sub_terrain_configs():
++  """G23 stair tuning must not leak into other robots or other G23 tasks."""
++  go1 = load_env_cfg("Mjlab-Velocity-Rough-Unitree-Go1")
++  goals = load_env_cfg(
++    "Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-J60-StairGoals"
++  )
++  j60 = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw-J60")
++  ranges = []
++  for cfg in (go1, goals, j60):
++    assert cfg.scene.terrain is not None
++    generator = cfg.scene.terrain.terrain_generator
++    assert generator is not None
++    ranges.append(cast(Any, generator.sub_terrains["pyramid_stairs"]).step_height_range)
++  assert ranges == [(0.0, 0.1), (0.05, 0.25), (0.02, 0.2)]

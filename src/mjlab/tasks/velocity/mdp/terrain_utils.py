@@ -145,3 +145,40 @@ def terrain_type_lookup(
   if not generator.curriculum:
     return None
   return torch.tensor([name in terrain_names for name in type_names], device=env.device)
+
+
+def terrain_step_height_lookup(
+  env: ManagerBasedRlEnv, terrain_names: tuple[str, ...]
+) -> torch.Tensor | None:
+  """Return the riser height of every curriculum patch, or None if unknown.
+
+  The result has shape ``[num_rows, num_cols]``: ``lookup[levels, types]`` gives
+  each env's step height on ``terrain_names`` and 0 elsewhere. Each named
+  sub-terrain must define ``step_height_range``. Random-grid terrain (play mode)
+  and planes have no per-env level, so callers then fall back to a default.
+  """
+  terrain = env.scene.terrain
+  if terrain is None or terrain.terrain_origins is None:
+    return None
+  generator = terrain.cfg.terrain_generator
+  assert generator is not None
+  type_names = tuple(generator.sub_terrains)
+  unknown = set(terrain_names) - set(type_names)
+  if unknown:
+    raise ValueError(f"Unknown terrain names: {sorted(unknown)}.")
+  if not generator.curriculum:
+    return None
+  num_rows = generator.num_rows
+  lower, upper = generator.difficulty_range
+  lookup = torch.zeros(num_rows, len(type_names), device=env.device)
+  for col, name in enumerate(type_names):
+    if name not in terrain_names:
+      continue
+    step_range = getattr(generator.sub_terrains[name], "step_height_range", None)
+    if step_range is None:
+      raise ValueError(f"Sub-terrain '{name}' has no step_height_range.")
+    for row in range(num_rows):
+      # Matches TerrainGenerator._generate_curriculum_terrains.
+      difficulty = lower + (upper - lower) * row / max(num_rows - 1, 1)
+      lookup[row, col] = step_range[0] + difficulty * (step_range[1] - step_range[0])
+  return lookup

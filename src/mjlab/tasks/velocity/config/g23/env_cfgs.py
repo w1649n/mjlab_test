@@ -77,6 +77,36 @@ _G23_STAIR_HEADING_DEVIATION_WEIGHT = -2.0
 # torque-speed curve and penalizes heating relative to the rated torque.
 _G23_J60_STAIR_HEADING_DEVIATION_WEIGHT = -10.0
 _G23_MOTOR_HEAT_WEIGHT = -0.03
+# 2026-10-16 stair-goals update: changes from the goal evaluation in
+# analysis/g23_goals_20261016. Straight segments hold their heading through
+# ang_vel_z at the deployment gain; a narrow yaw-rate kernel rewards the small
+# corrections that the sqrt(0.5) kernel ignored.
+_G23_GOALS_HEADING_STIFFNESS = 3.0
+_G23_GOALS_FINE_YAW_STD = 0.15
+# 2026-10-16 stair-goals v2: the first StairGoals run learned to stop short of the
+# first riser at 0.3 m/s (analysis/g23_goals_20261016/reward_attribution.py). A
+# narrow speed kernel makes ignoring a slow command cost more than what standing
+# still earns through pose, upright, heating and yaw terms.
+_G23_GOALS_FINE_YAW_WEIGHT = 0.5
+_G23_GOALS_FINE_LIN_STD = 0.2
+_G23_GOALS_FINE_LIN_WEIGHT = 2.0
+# 20 cm risers sat on the top level and were rarely trained; extend to 25 cm.
+_G23_GOALS_STAIR_STEP_HEIGHT_RANGE = (0.05, 0.25)
+# Swing target = riser + margin on stairs (0.16 m floor, 0.24 m cap).
+_G23_GOALS_STAIR_CLEARANCE_MARGIN = 0.04
+_G23_GOALS_MAX_FOOT_CLEARANCE = 0.24
+# Stopping: pull toward the default pose on level ground only (it cannot be held
+# across stair treads, and charging it there taught the policy to avoid stairs),
+# and give the feet a settling window before joint motion and lifted feet count.
+_G23_GOALS_REL_STANDING_ENVS = 0.2
+_G23_GOALS_STANDING_SETTLE_TIME = 1.0
+_G23_GOALS_STANDING_DEVIATION_SETTLE_TIME = 0.5
+_G23_GOALS_STANDING_DEVIATION_WEIGHT = -20.0
+_G23_GOALS_STANDING_LEVEL_TOLERANCE = 0.03
+_G23_GOALS_STANDING_VELOCITY_WEIGHT = -0.05
+# Charge only the heating above each motor's continuous rating; -0.1 made slowing
+# down or not climbing pay off, so keep it a mild nudge next to motor_heat.
+_G23_GOALS_MOTOR_HEAT_EXCESS_WEIGHT = -0.02
 
 _G23_PROPRIO_TERM_ORDER = (
   "base_ang_vel",
@@ -662,6 +692,86 @@ def syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg(
     weight=_G23_MOTOR_HEAT_WEIGHT,
     params={"rated_torque": G23_J60_RATED_TORQUE},
   )
+  return cfg
+
+
+def syncai_g23_rough_proprio_history6_stair_goals_env_cfg(
+  play: bool = False,
+) -> ManagerBasedRlEnvCfg:
+  """J60 StairYaw task tuned for the heading, 20 cm, stance and heating goals."""
+  cfg = syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg(play=play)
+  # Actor observations are unchanged, so StairYaw/J60 checkpoints fine-tune here.
+
+  twist = cfg.commands["twist"]
+  assert isinstance(twist, UniformVelocityCommandCfg)
+  twist.directional_heading_hold = True
+  twist.heading_control_stiffness = _G23_GOALS_HEADING_STIFFNESS
+  twist.rel_standing_envs = _G23_GOALS_REL_STANDING_ENVS
+  cfg.rewards["track_yaw_rate_fine"] = RewardTermCfg(
+    func=mdp.track_angular_velocity_yaw,
+    weight=_G23_GOALS_FINE_YAW_WEIGHT,
+    params={"command_name": "twist", "std": _G23_GOALS_FINE_YAW_STD},
+  )
+  cfg.rewards["track_linear_velocity_fine"] = RewardTermCfg(
+    func=mdp.track_linear_velocity_xy,
+    weight=_G23_GOALS_FINE_LIN_WEIGHT,
+    params={"command_name": "twist", "std": _G23_GOALS_FINE_LIN_STD},
+  )
+
+  terrain = cfg.scene.terrain
+  assert terrain is not None and terrain.terrain_generator is not None
+  for stair_name in _G23_STAIR_TERRAIN_NAMES:
+    stair = cast(Any, terrain.terrain_generator.sub_terrains[stair_name])
+    stair.step_height_range = _G23_GOALS_STAIR_STEP_HEIGHT_RANGE
+  if "terrain_levels" in cfg.curriculum:
+    cfg.curriculum["terrain_levels"] = CurriculumTermCfg(
+      func=mdp.terrain_levels_tracked,
+      params={"command_name": "twist"},
+    )
+  for reward_name, func in (
+    ("foot_clearance", mdp.feet_clearance_stair_adaptive),
+    ("foot_swing_height", mdp.feet_swing_height_stair_adaptive),
+  ):
+    clearance = cfg.rewards[reward_name]
+    clearance.func = func
+    clearance.params.update(
+      terrain_names=_G23_STAIR_TERRAIN_NAMES,
+      step_height_margin=_G23_GOALS_STAIR_CLEARANCE_MARGIN,
+      max_target_height=_G23_GOALS_MAX_FOOT_CLEARANCE,
+    )
+
+  cfg.rewards["standing_joint_deviation"] = RewardTermCfg(
+    func=mdp.standing_joint_deviation_l2,
+    weight=_G23_GOALS_STANDING_DEVIATION_WEIGHT,
+    params={
+      "command_name": "twist",
+      "settle_time_s": _G23_GOALS_STANDING_DEVIATION_SETTLE_TIME,
+      "foot_height_sensor_name": "foot_height_scan",
+      "level_tolerance": _G23_GOALS_STANDING_LEVEL_TOLERANCE,
+    },
+  )
+  cfg.rewards["standing_joint_velocity"] = RewardTermCfg(
+    func=mdp.standing_joint_velocity_l2,
+    weight=_G23_GOALS_STANDING_VELOCITY_WEIGHT,
+    params={
+      "command_name": "twist",
+      "settle_time_s": _G23_GOALS_STANDING_SETTLE_TIME,
+    },
+  )
+  cfg.rewards["standing_missing_foot_contacts"].params["settle_time_s"] = (
+    _G23_GOALS_STANDING_SETTLE_TIME
+  )
+
+  cfg.rewards["motor_heat_excess"] = RewardTermCfg(
+    func=mdp.motor_heat_l2,
+    weight=_G23_GOALS_MOTOR_HEAT_EXCESS_WEIGHT,
+    params={"rated_torque": G23_J60_RATED_TORQUE, "threshold": 1.0},
+  )
+
+  # Mirror augmentation needs contact forces in the base frame; the critic keeps
+  # its dimensions, so its checkpoint weights still load.
+  forces = cfg.observations["critic"].terms["foot_contact_forces"]
+  forces.func = mdp.foot_contact_forces_b
   return cfg
 
 

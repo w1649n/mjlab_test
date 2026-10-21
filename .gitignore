@@ -1,5 +1,8 @@
 wandb/
-logs/
+# logs/
+logs/**/events.out.tfevents.*
+logs/**/torchrunx/
+logs/*.out
 onnx/
 videos/
 __pycache__/

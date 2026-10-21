@@ -1,0 +1,3598 @@
+--- git commit ---
+a3e8dc55617627efc98118714afa31cfda856cbe
+
+
+--- git status ---
+On branch g23
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   scripts/play.sh
+	modified:   scripts/train.sh
+	modified:   src/mjlab/managers/curriculum_manager.py
+	modified:   src/mjlab/rl/runner.py
+	modified:   src/mjlab/rl/vecenv_wrapper.py
+	modified:   src/mjlab/scripts/train.py
+	modified:   src/mjlab/tasks/velocity/config/g23/__init__.py
+	modified:   src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+	modified:   src/mjlab/tasks/velocity/config/g23/rl_cfg.py
+	modified:   src/mjlab/tasks/velocity/mdp/curriculums.py
+	modified:   src/mjlab/tasks/velocity/mdp/rewards.py
+	modified:   src/mjlab/tasks/velocity/mdp/terminations.py
+	modified:   src/mjlab/tasks/velocity/mdp/velocity_command.py
+	modified:   src/mjlab/tasks/velocity/rl/runner.py
+	modified:   tests/test_curriculum_manager.py
+	modified:   tests/test_runner.py
+	modified:   tests/test_velocity_command.py
+	modified:   tests/test_velocity_rewards.py
+	modified:   tests/test_velocity_task.py
+	modified:   tests/test_velocity_terminations.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	tests/test_train_resume.py
+	tests/test_velocity_curriculum.py
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/scripts/play.sh b/scripts/play.sh
+index 64d5147..cac7a8e 100755
+--- a/scripts/play.sh
++++ b/scripts/play.sh
+@@ -647,7 +647,7 @@ if [[ $DRY_RUN == true ]]; then
+   exit 0
+ fi
+ 
+-prompt_yes_no "開始播放？" no
++prompt_yes_no "開始播放？" yes
+ [[ $ANSWER == True ]] || cancel
+ 
+ cd -- "$RUN_PROJECT"
+diff --git a/scripts/train.sh b/scripts/train.sh
+index 1b4485d..b80a133 100755
+--- a/scripts/train.sh
++++ b/scripts/train.sh
+@@ -805,7 +805,7 @@ if [[ $DRY_RUN == true ]]; then
+   exit 0
+ fi
+ 
+-prompt_yes_no "開始訓練？" no
++prompt_yes_no "開始訓練？" yes
+ [[ $ANSWER == True ]] || cancel
+ 
+ cd -- "$RUN_PROJECT"
+diff --git a/src/mjlab/managers/curriculum_manager.py b/src/mjlab/managers/curriculum_manager.py
+index cafd2d2..e541ba8 100644
+--- a/src/mjlab/managers/curriculum_manager.py
++++ b/src/mjlab/managers/curriculum_manager.py
+@@ -116,6 +116,30 @@ class CurriculumManager(ManagerBase):
+       state = term_cfg.func(self._env, env_ids, **term_cfg.params)
+       self._curriculum_state[name] = state
+ 
++  # 2026-09-02 stair-training update: persist state owned by class-based terms.
++  def state_dict(self) -> dict[str, Any]:
++    """Collect checkpoint state exposed by stateful curriculum terms."""
++    state: dict[str, Any] = {}
++    for term_name, term_cfg in zip(self._term_names, self._term_cfgs, strict=False):
++      term_state_dict = getattr(term_cfg.func, "state_dict", None)
++      if callable(term_state_dict):
++        state[term_name] = term_state_dict()
++    return state
++
++  # 2026-09-02 stair-training update: restore only compatible active terms.
++  def load_state_dict(self, state_dict: dict[str, Any]) -> None:
++    """Restore state for active curriculum terms that support loading.
++
++    Missing terms are left untouched and state for terms no longer present in the
++    configuration is ignored, allowing checkpoints to survive curriculum changes.
++    """
++    for term_name, term_cfg in zip(self._term_names, self._term_cfgs, strict=False):
++      if term_name not in state_dict:
++        continue
++      load_term_state = getattr(term_cfg.func, "load_state_dict", None)
++      if callable(load_term_state):
++        load_term_state(state_dict[term_name])
++
+   def _prepare_terms(self):
+     for term_name, term_cfg in self.cfg.items():
+       term_cfg: CurriculumTermCfg | None
+@@ -153,3 +177,11 @@ class NullCurriculumManager:
+ 
+   def compute(self, env_ids: torch.Tensor | None = None) -> None:
+     pass
++
++  # 2026-09-02 stair-training update: match the active manager checkpoint API.
++  def state_dict(self) -> dict[str, Any]:
++    return {}
++
++  # 2026-09-02 stair-training update: old/new checkpoints are both no-ops here.
++  def load_state_dict(self, state_dict: dict[str, Any]) -> None:
++    del state_dict
+diff --git a/src/mjlab/rl/runner.py b/src/mjlab/rl/runner.py
+index 2934929..bbd6bb6 100644
+--- a/src/mjlab/rl/runner.py
++++ b/src/mjlab/rl/runner.py
+@@ -1,10 +1,13 @@
+ import os
++import warnings
+ from pathlib import Path
++from typing import Any, cast
+ 
+ import torch
+ from rsl_rl.env import VecEnv
+ from rsl_rl.runners import OnPolicyRunner
+ 
++from mjlab.entity import Entity
+ from mjlab.rl.vecenv_wrapper import RslRlVecEnvWrapper
+ 
+ 
+@@ -67,10 +70,28 @@ class MjlabOnPolicyRunner(OnPolicyRunner):
+   def save(self, path: str, infos=None) -> None:
+     """Save checkpoint.
+ 
+-    Extends the base implementation to persist the environment's
+-    common_step_counter and to respect the ``upload_model`` config flag.
++    Extends the base implementation to persist the environment's curriculum
++    progress and to respect the ``upload_model`` config flag.
+     """
+-    env_state = {"common_step_counter": self.env.unwrapped.common_step_counter}
++    env_state: dict[str, Any] = {
++      "common_step_counter": self.env.unwrapped.common_step_counter
++    }
++    # 2026-09-02 stair-training update: checkpoint stateful curriculum terms.
++    env_state["curriculum"] = self.env.unwrapped.curriculum_manager.state_dict()
++
++    terrain = self.env.unwrapped.scene.terrain
++    if terrain is not None and terrain.terrain_origins is not None:
++      # fix terrain levels problem: keep curriculum placement when training resumes.
++      generator_cfg = terrain.cfg.terrain_generator
++      env_state["terrain"] = {
++        # Store environment state on CPU so checkpoints are portable across devices.
++        "levels": terrain.terrain_levels.detach().cpu().clone(),
++        "types": terrain.terrain_types.detach().cpu().clone(),
++        "grid_shape": tuple(int(size) for size in terrain.terrain_origins.shape[:2]),
++        "terrain_names": (
++          tuple(generator_cfg.sub_terrains) if generator_cfg is not None else None
++        ),
++      }
+     infos = {**(infos or {}), "env_state": env_state}
+     # Inline base OnPolicyRunner.save() to conditionally gate W&B upload.
+     saved_dict = self.alg.save()
+@@ -90,7 +111,7 @@ class MjlabOnPolicyRunner(OnPolicyRunner):
+     """Load checkpoint.
+ 
+     Extends the base implementation to:
+-    1. Restore common_step_counter to preserve curricula state.
++    1. Restore the step counter and compatible terrain curriculum placement.
+     2. Migrate legacy checkpoints (actor.* -> mlp.*, actor_obs_normalizer.*
+       -> obs_normalizer.*) to the current format (rsl-rl>=4.0).
+     """
+@@ -135,7 +156,204 @@ class MjlabOnPolicyRunner(OnPolicyRunner):
+     if load_iteration:
+       self.current_learning_iteration = loaded_dict["iter"]
+ 
+-    infos = loaded_dict["infos"]
+-    if infos and "env_state" in infos:
+-      self.env.unwrapped.common_step_counter = infos["env_state"]["common_step_counter"]
++    infos = loaded_dict.get("infos")
++    # Partial loads are used by play/hot-swap and must not teleport the live env.
++    if load_iteration and infos and "env_state" in infos:
++      self._restore_env_state(infos["env_state"])
+     return infos
++
++  def _restore_env_state(self, env_state: object) -> None:
++    """Restore checkpointed environment state for a full training resume."""
++    if not isinstance(env_state, dict):
++      warnings.warn(
++        "Checkpoint env_state is not a dictionary; environment state was not restored.",
++        RuntimeWarning,
++        stacklevel=2,
++      )
++      return
++    env_state = cast(dict[str, Any], env_state)
++
++    common_step_counter = env_state.get("common_step_counter")
++    if isinstance(common_step_counter, int):
++      self.env.unwrapped.common_step_counter = common_step_counter
++    elif common_step_counter is not None:
++      warnings.warn(
++        "Checkpoint common_step_counter is invalid; keeping the current value.",
++        RuntimeWarning,
++        stacklevel=2,
++      )
++
++    terrain_state = env_state.get("terrain")
++    if terrain_state is not None:
++      self._restore_terrain_state(terrain_state)
++
++    # 2026-09-02 stair-training update: old checkpoints omit this key.
++    curriculum_state = env_state.get("curriculum")
++    if curriculum_state is not None:
++      self.env.unwrapped.curriculum_manager.load_state_dict(curriculum_state)
++
++  def _restore_terrain_state(self, terrain_state: object) -> None:
++    """Restore terrain buckets and translate the live scene to their new origins."""
++    env = self.env.unwrapped
++    terrain = env.scene.terrain
++    if terrain is None or terrain.terrain_origins is None:
++      warnings.warn(
++        "Checkpoint contains terrain curriculum state, but the current environment "
++        "has no curriculum terrain; terrain state was not restored.",
++        RuntimeWarning,
++        stacklevel=2,
++      )
++      return
++    if not isinstance(terrain_state, dict):
++      warnings.warn(
++        "Checkpoint terrain state is invalid; terrain state was not restored.",
++        RuntimeWarning,
++        stacklevel=2,
++      )
++      return
++    terrain_state = cast(dict[str, Any], terrain_state)
++
++    saved_grid_shape = terrain_state.get("grid_shape")
++    current_grid_shape = tuple(int(size) for size in terrain.terrain_origins.shape[:2])
++    if (
++      not isinstance(saved_grid_shape, (tuple, list))
++      or tuple(saved_grid_shape) != current_grid_shape
++    ):
++      warnings.warn(
++        "Checkpoint terrain grid does not match the current configuration; "
++        "terrain state was not restored.",
++        RuntimeWarning,
++        stacklevel=2,
++      )
++      return
++
++    generator_cfg = terrain.cfg.terrain_generator
++    current_terrain_names = (
++      tuple(generator_cfg.sub_terrains) if generator_cfg is not None else None
++    )
++    saved_terrain_names = terrain_state.get("terrain_names")
++    if saved_terrain_names is not None and (
++      not isinstance(saved_terrain_names, (tuple, list))
++      or tuple(saved_terrain_names) != current_terrain_names
++    ):
++      warnings.warn(
++        "Checkpoint terrain types do not match the current configuration; "
++        "terrain state was not restored.",
++        RuntimeWarning,
++        stacklevel=2,
++      )
++      return
++
++    levels = self._validated_terrain_indices(
++      terrain_state.get("levels"),
++      name="levels",
++      current=terrain.terrain_levels,
++      upper_bound=current_grid_shape[0],
++    )
++    types = self._validated_terrain_indices(
++      terrain_state.get("types"),
++      name="types",
++      current=terrain.terrain_types,
++      upper_bound=current_grid_shape[1],
++    )
++    if levels is None or types is None:
++      return
++
++    if not isinstance(terrain.env_origins, torch.Tensor):
++      warnings.warn(
++        "Current terrain origins are invalid; terrain state was not restored.",
++        RuntimeWarning,
++        stacklevel=2,
++      )
++      return
++
++    old_origins = terrain.env_origins.clone()
++    new_origins = terrain.terrain_origins[levels, types]
++    if old_origins.shape != new_origins.shape:
++      warnings.warn(
++        "Checkpoint terrain origins do not match the current environment count; "
++        "terrain state was not restored.",
++        RuntimeWarning,
++        stacklevel=2,
++      )
++      return
++
++    origin_delta = new_origins - old_origins
++    terrain.terrain_levels.copy_(levels)
++    terrain.terrain_types.copy_(types)
++    terrain.env_origins.copy_(new_origins)
++
++    # The wrapper has already reset entities at its initially sampled origins.
++    # Translate them by the same delta instead of resetting again, which would run
++    # the curriculum and could immediately alter the restored terrain levels.
++    for entity in env.scene.entities.values():
++      if not isinstance(entity, Entity):
++        continue
++      if entity.is_fixed_base and entity.is_mocap:
++        mocap_id = entity.data.indexing.mocap_id
++        assert mocap_id is not None
++        mocap_pose = torch.cat(
++          [
++            entity.data.data.mocap_pos[:, mocap_id],
++            entity.data.data.mocap_quat[:, mocap_id],
++          ],
++          dim=-1,
++        ).clone()
++        mocap_pose[:, :3] += origin_delta
++        entity.write_mocap_pose_to_sim(mocap_pose)
++      elif not entity.is_fixed_base:
++        root_pose = entity.data.root_link_pose_w.clone()
++        root_pose[:, :3] += origin_delta
++        entity.write_root_link_pose_to_sim(root_pose)
++
++    # Refresh all derived state and force the next observation query to rebuild.
++    env.sim.forward()
++    env.sim.sense()
++    env.observation_manager.invalidate_cache()
++
++  @staticmethod
++  def _validated_terrain_indices(
++    value: object,
++    *,
++    name: str,
++    current: torch.Tensor,
++    upper_bound: int,
++  ) -> torch.Tensor | None:
++    """Validate and move saved terrain index vectors to the environment device."""
++    if not isinstance(value, torch.Tensor) or value.shape != current.shape:
++      warnings.warn(
++        f"Checkpoint terrain {name} do not match the current environment count; "
++        "terrain state was not restored.",
++        RuntimeWarning,
++        stacklevel=2,
++      )
++      return None
++    if value.is_complex():
++      warnings.warn(
++        f"Checkpoint terrain {name} contain complex values; terrain state was not "
++        "restored.",
++        RuntimeWarning,
++        stacklevel=2,
++      )
++      return None
++    if value.is_floating_point() and (
++      not torch.isfinite(value).all() or not torch.equal(value, value.round())
++    ):
++      warnings.warn(
++        f"Checkpoint terrain {name} contain non-integer values; terrain state "
++        "was not restored.",
++        RuntimeWarning,
++        stacklevel=2,
++      )
++      return None
++
++    indices = value.to(device=current.device, dtype=torch.long)
++    if torch.any(indices < 0) or torch.any(indices >= upper_bound):
++      warnings.warn(
++        f"Checkpoint terrain {name} are outside the current terrain grid; "
++        "terrain state was not restored.",
++        RuntimeWarning,
++        stacklevel=2,
++      )
++      return None
++    return indices
+diff --git a/src/mjlab/rl/vecenv_wrapper.py b/src/mjlab/rl/vecenv_wrapper.py
+index 28c207b..e141850 100644
+--- a/src/mjlab/rl/vecenv_wrapper.py
++++ b/src/mjlab/rl/vecenv_wrapper.py
+@@ -1,3 +1,5 @@
++import math
++
+ import torch
+ from rsl_rl.env import VecEnv
+ from tensordict import TensorDict
+@@ -12,6 +14,12 @@ class RslRlVecEnvWrapper(VecEnv):
+     env: ManagerBasedRlEnv,
+     clip_actions: float | None = None,
+   ):
++    if clip_actions is not None and (
++      not math.isfinite(clip_actions) or clip_actions <= 0.0
++    ):
++      raise ValueError(
++        f"clip_actions must be a positive finite value, got {clip_actions}."
++      )
+     self.env = env
+     self.clip_actions = clip_actions
+ 
+@@ -72,15 +80,35 @@ class RslRlVecEnvWrapper(VecEnv):
+   def step(
+     self, actions: torch.Tensor
+   ) -> tuple[TensorDict, torch.Tensor, torch.Tensor, dict]:
++    finite_actions = torch.isfinite(actions)
++    if not finite_actions.all():
++      nonfinite_count = int((~finite_actions).sum().item())
++      raise FloatingPointError(
++        "Policy produced "
++        f"{nonfinite_count} non-finite raw action value(s); refusing to step the "
++        "environment so invalid actions cannot enter PPO history."
++      )
++
++    raw_action_abs_max: torch.Tensor | None = None
++    raw_action_clip_fraction: torch.Tensor | None = None
+     if self.clip_actions is not None:
++      raw_action_abs_max = actions.abs().amax()
++      raw_action_clip_fraction = (actions.abs() > self.clip_actions).float().mean()
+       actions = torch.clamp(actions, -self.clip_actions, self.clip_actions)
+     obs_dict, rew, terminated, truncated, extras = self.env.step(actions)
++    if raw_action_abs_max is not None and raw_action_clip_fraction is not None:
++      log = extras.setdefault("log", {})
++      log["Metrics/raw_action_step_abs_max"] = raw_action_abs_max
++      log["Metrics/raw_action_clip_fraction"] = raw_action_clip_fraction
+     term_or_trunc = terminated | truncated
+     assert isinstance(rew, torch.Tensor)
+     assert isinstance(term_or_trunc, torch.Tensor)
+     dones = term_or_trunc.to(dtype=torch.long)
+     if not self.cfg.is_finite_horizon:
+-      extras["time_outs"] = truncated
++      # 2026-09-02 stair-training update: RSL-RL bootstraps every transition
++      # marked as a timeout.  If a horizon timeout and a failure happen on the
++      # same step, the failure must take precedence and remain terminal.
++      extras["time_outs"] = truncated & ~terminated
+     return (
+       TensorDict(obs_dict, batch_size=[self.num_envs]),
+       rew,
+diff --git a/src/mjlab/scripts/train.py b/src/mjlab/scripts/train.py
+index c27e582..4d8463c 100644
+--- a/src/mjlab/scripts/train.py
++++ b/src/mjlab/scripts/train.py
+@@ -46,6 +46,11 @@ class TrainConfig:
+     return TrainConfig(env=env_cfg, agent=agent_cfg)
+ 
+ 
++def _should_randomize_initial_episode_lengths(resume_path: Path | None) -> bool:
++  """Randomize initial episode lengths only for a fresh training run."""
++  return resume_path is None
++
++
+ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
+   cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+   if cuda_visible == "":
+@@ -172,8 +177,12 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
+     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
+     runner.load(str(resume_path))
+ 
++  # fix terrain levels problem
++  # A resumed run must start with full-length episodes so the terrain curriculum
++  # does not mistake a deliberately shortened first episode for poor performance.
+   runner.learn(
+-    num_learning_iterations=cfg.agent.max_iterations, init_at_random_ep_len=True
++    num_learning_iterations=cfg.agent.max_iterations,
++    init_at_random_ep_len=_should_randomize_initial_episode_lengths(resume_path),
+   )
+ 
+   env.close()
+diff --git a/src/mjlab/tasks/velocity/config/g23/__init__.py b/src/mjlab/tasks/velocity/config/g23/__init__.py
+index 624874c..32489bf 100644
+--- a/src/mjlab/tasks/velocity/config/g23/__init__.py
++++ b/src/mjlab/tasks/velocity/config/g23/__init__.py
+@@ -1,7 +1,12 @@
+ from mjlab.tasks.registry import register_mjlab_task
+ from mjlab.tasks.velocity.rl import VelocityOnPolicyRunner
+ 
+-from .env_cfgs import syncai_g23_rough_env_cfg, syncai_g23_rough_proprio_env_cfg
++from .env_cfgs import (
++  syncai_g23_flat_proprio_env_cfg,
++  syncai_g23_rough_env_cfg,
++  syncai_g23_rough_proprio_env_cfg,
++  syncai_g23_rough_proprio_history6_env_cfg,
++)
+ from .rl_cfg import syncai_g23_ppo_runner_cfg
+ 
+ register_mjlab_task(
+@@ -19,3 +24,21 @@ register_mjlab_task(
+   rl_cfg=syncai_g23_ppo_runner_cfg(experiment_name="g23_velocity_proprio"),
+   runner_cls=VelocityOnPolicyRunner,
+ )
++
++# 2026-09-02 stair-training update: opt-in six-frame actor history. This task
++# intentionally uses a new experiment because old 45-D checkpoints are incompatible.
++register_mjlab_task(
++  task_id="Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6",
++  env_cfg=syncai_g23_rough_proprio_history6_env_cfg(),
++  play_env_cfg=syncai_g23_rough_proprio_history6_env_cfg(play=True),
++  rl_cfg=syncai_g23_ppo_runner_cfg(experiment_name="g23_velocity_proprio_history6"),
++  runner_cls=VelocityOnPolicyRunner,
++)
++
++register_mjlab_task(
++  task_id="Mjlab-Velocity-Flat-SyncAI-G23-Proprio",
++  env_cfg=syncai_g23_flat_proprio_env_cfg(),
++  play_env_cfg=syncai_g23_flat_proprio_env_cfg(play=True),
++  rl_cfg=syncai_g23_ppo_runner_cfg(experiment_name="g23_velocity_flat_proprio"),
++  runner_cls=VelocityOnPolicyRunner,
++)
+diff --git a/src/mjlab/tasks/velocity/config/g23/env_cfgs.py b/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+index bacc18f..85a1182 100644
+--- a/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
++++ b/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+@@ -1,5 +1,8 @@
+ """SyncAI G23 velocity environment configurations."""
+ 
++import math
++from typing import Any, cast
++
+ from mjlab.asset_zoo.robots import (
+   G23_ACTION_SCALE,
+   G23_FOOT_SITE_NAMES,
+@@ -9,12 +12,14 @@ from mjlab.envs import ManagerBasedRlEnvCfg
+ from mjlab.envs import mdp as envs_mdp
+ from mjlab.envs.mdp.actions import JointPositionActionCfg
+ from mjlab.managers import TerminationTermCfg
++from mjlab.managers.curriculum_manager import CurriculumTermCfg
+ from mjlab.managers.event_manager import EventTermCfg
+ from mjlab.managers.reward_manager import RewardTermCfg
+ from mjlab.managers.scene_entity_config import SceneEntityCfg
+ from mjlab.sensor import (
+   ContactMatch,
+   ContactSensorCfg,
++  GridPatternCfg,
+   ObjRef,
+   RayCastSensorCfg,
+   RingPatternCfg,
+@@ -32,29 +37,35 @@ _SHANK_GEOM_NAMES = tuple(
+   f"{leg}_shank_collision{suffix}" for leg in _LEG_NAMES for suffix in ("", "1")
+ )
+ _TORSO_GEOM_NAMES = ("torso_collision", "torso_collision1")
+-#first parameter: heightfield horizontal_scale = 0.1
++
++# 2026-09-02 stair-training update: keep all G23 stair/recovery tuning in one
++# named block so future fine-tuning does not depend on checkpoint iteration.
+ _G23_HFIELD_HORIZONTAL_SCALE = 0.2
+-#first parameter: wave_terrain amplitude_range = (0.0, 0.2)
+ _G23_WAVE_AMPLITUDE_RANGE = (0.0, 0.08)
+-#first parameter: pyramid stair step_height_range = (0.0, 0.1)
+-_G23_STAIR_STEP_HEIGHT_RANGE = (0.02, 0.20)  # second parameter
+-#first parameter: pyramid stair step_width = 0.3
+-_G23_STAIR_STEP_WIDTH = 0.30  # second parameter
+-#first parameter: foot clearance and swing target_height = 0.1
+-_G23_FOOT_CLEARANCE_TARGET_HEIGHT = 0.16  # second parameter
+-#first parameter: cfg.scene.terrain.max_init_terrain_level = 5
+-_G23_MAX_INIT_TERRAIN_LEVEL = 3  # second parameter
+-#second parameter: maximum command lin_vel_x reached (-2.0, 3.0)
+-_G23_MAX_FORWARD_SPEED = 1.5  #third parameter
+-#second parameter: shank_collision weight = -0.1
+-_G23_SHANK_COLLISION_WEIGHT = -0.25  #third parameter
+-#second parameter: shank_collision used default force_threshold = 10.0
+-_G23_SHANK_PENALTY_FORCE_THRESHOLD = 10.0  #third parameter
+-#second parameter: shank_illegal_contact reset on any force > 10.0
+-_G23_SHANK_TERMINATION_FORCE_THRESHOLD = 120.0  #third parameter
+-#second parameter: shank_illegal_contact reset on any history hit
+-_G23_SHANK_TERMINATION_HISTORY_COUNT = 3  #third parameter
+-_RL_TRAIN_POLICY_TERM_ORDER = (
++_G23_STAIR_STEP_HEIGHT_RANGE = (0.02, 0.20)
++_G23_STAIR_STEP_WIDTH = 0.30
++_G23_FOOT_CLEARANCE_TARGET_HEIGHT = 0.16
++_G23_MAX_INIT_TERRAIN_LEVEL = 3
++_G23_MAX_FORWARD_SPEED = 1.5
++_G23_SHANK_COLLISION_WEIGHT = -0.25
++_G23_SHANK_PENALTY_FORCE_THRESHOLD = 10.0
++_G23_THIGH_TERMINATION_FORCE_THRESHOLD = 60.0
++_G23_THIGH_TERMINATION_HISTORY_COUNT = 2
++_G23_SHANK_TERMINATION_FORCE_THRESHOLD = 180.0
++_G23_SHANK_TERMINATION_HISTORY_COUNT = 4
++_G23_TORSO_TERMINATION_FORCE_THRESHOLD = 80.0
++_G23_TORSO_TERMINATION_HISTORY_COUNT = 3
++_G23_BASE_HEIGHT_TARGET = 0.35
++# 2026-09-02 anti-tripod update: bound the cost while making a persistently
++# airborne foot more expensive than avoiding a normal landing.
++_G23_MAX_FOOT_AIR_TIME = 0.55
++_G23_MAX_FOOT_AIR_EXCESS_TIME = 0.50
++_G23_GATE_MAX_FOOT_AIR_TIME = 0.80
++_G23_TERMINATION_MAX_FOOT_AIR_TIME = 2.0
++_G23_EXCESSIVE_FOOT_AIR_TIME_WEIGHT = -4.0
++_G23_STANDING_MISSING_CONTACT_WEIGHT = -0.5
++
++_G23_PROPRIO_TERM_ORDER = (
+   "base_ang_vel",
+   "projected_gravity",
+   "command",
+@@ -64,11 +75,11 @@ _RL_TRAIN_POLICY_TERM_ORDER = (
+ )
+ 
+ 
+-def _set_rl_train_policy_observation_order(cfg: ManagerBasedRlEnvCfg) -> None:
+-  """Match RL-train's proprioceptive actor observation order."""
++def _set_g23_proprio_observation_order(cfg: ManagerBasedRlEnvCfg) -> None:
++  """Use the compact 45-D G23 proprioceptive actor observation."""
+   actor_terms = cfg.observations["actor"].terms
+   cfg.observations["actor"].terms = {
+-    name: actor_terms[name] for name in _RL_TRAIN_POLICY_TERM_ORDER
++    name: actor_terms[name] for name in _G23_PROPRIO_TERM_ORDER
+   }
+ 
+ 
+@@ -80,25 +91,25 @@ def _tune_g23_rough_terrain(cfg: ManagerBasedRlEnvCfg) -> None:
+ 
+   generator = terrain.terrain_generator
+   generator.curriculum = True
+-  terrain.max_init_terrain_level = _G23_MAX_INIT_TERRAIN_LEVEL  # second parameter
++  terrain.max_init_terrain_level = _G23_MAX_INIT_TERRAIN_LEVEL
+ 
+   for sub_terrain in generator.sub_terrains.values():
+     if hasattr(sub_terrain, "horizontal_scale"):
+-      sub_terrain.horizontal_scale = max(
+-        sub_terrain.horizontal_scale, _G23_HFIELD_HORIZONTAL_SCALE
++      heightfield = cast(Any, sub_terrain)
++      heightfield.horizontal_scale = max(
++        heightfield.horizontal_scale, _G23_HFIELD_HORIZONTAL_SCALE
+       )
+ 
+-  #first parameter: inherited rough terrain proportions are
+-  #first parameter: flat=0.2, stairs=0.2/0.2, slopes=0.1/0.1, rough=0.1, wave=0.1
+-  #second parameter: flat=0.10, stairs=0.30/0.30, slopes=0.10/0.10, rough=0.10, wave=0.00
++  # 2026-09-02 stair-training update: focus 80% of generated patches on both
++  # stair directions while retaining a small non-stair robustness set.
+   terrain_proportions = {
+-    "flat": 0.10,  #third parameter
+-    "pyramid_stairs": 0.40,  #third parameter
+-    "pyramid_stairs_inv": 0.40,  #third parameter
+-    "hf_pyramid_slope": 0.025,  #third parameter
+-    "hf_pyramid_slope_inv": 0.025,  #third parameter
+-    "random_rough": 0.05,  #third parameter
+-    "wave_terrain": 0.00,  #third parameter
++    "flat": 0.10,
++    "pyramid_stairs": 0.40,
++    "pyramid_stairs_inv": 0.40,
++    "hf_pyramid_slope": 0.025,
++    "hf_pyramid_slope_inv": 0.025,
++    "random_rough": 0.05,
++    "wave_terrain": 0.00,
+   }
+   for terrain_name, proportion in terrain_proportions.items():
+     sub_terrain = generator.sub_terrains.get(terrain_name)
+@@ -106,64 +117,102 @@ def _tune_g23_rough_terrain(cfg: ManagerBasedRlEnvCfg) -> None:
+       sub_terrain.proportion = proportion
+ 
+   for stair_name in ("pyramid_stairs", "pyramid_stairs_inv"):
+-    stair = generator.sub_terrains.get(stair_name)
++    stair = cast(Any, generator.sub_terrains.get(stair_name))
+     if stair is not None:
+-      stair.step_height_range = _G23_STAIR_STEP_HEIGHT_RANGE  # second parameter
+-      stair.step_width = _G23_STAIR_STEP_WIDTH  # second parameter
++      stair.step_height_range = _G23_STAIR_STEP_HEIGHT_RANGE
++      stair.step_width = _G23_STAIR_STEP_WIDTH
+ 
+   wave_terrain = generator.sub_terrains.get("wave_terrain")
+   if wave_terrain is not None and hasattr(wave_terrain, "amplitude_range"):
+-    wave_terrain.amplitude_range = _G23_WAVE_AMPLITUDE_RANGE
++    cast(Any, wave_terrain).amplitude_range = _G23_WAVE_AMPLITUDE_RANGE
+ 
+ 
+ def _tune_g23_locomotion_curriculum(cfg: ManagerBasedRlEnvCfg) -> None:
+-  """Tune G23 rough locomotion for better foot clearance before harder commands."""
++  """Gate harder G23 commands on demonstrated stair performance."""
+   twist_cmd = cfg.commands["twist"]
+   assert isinstance(twist_cmd, UniformVelocityCommandCfg)
+ 
+-  #first parameter: twist_cmd.rel_forward_envs = 0.2
+-  # twist_cmd.rel_forward_envs = 0.6  # second parameter
+-  twist_cmd.rel_forward_envs = 0.4  # fourth parameter
+-  #first parameter: twist_cmd.rel_heading_envs = 0.3
+-  twist_cmd.rel_heading_envs = 0.1  # second parameter
+-  #second parameter: twist_cmd.ranges.lin_vel_x inherited base range before curriculum
+-  twist_cmd.ranges.lin_vel_x = (
+-    -_G23_MAX_FORWARD_SPEED,
+-    _G23_MAX_FORWARD_SPEED,
+-  )  #third parameter
+-  #first parameter: twist_cmd.ranges.lin_vel_y = (-1.0, 1.0)
+-  twist_cmd.ranges.lin_vel_y = (-0.2, 0.2)  # second parameter
+-
+-  command_curriculum = cfg.curriculum["command_vel"]
+-  #first parameter: velocity_stages = [
+-  #first parameter:   {"step": 0, "lin_vel_x": (-1.0, 1.0), "ang_vel_z": (-0.5, 0.5)},
+-  #first parameter:   {"step": 5000 * 24, "lin_vel_x": (-1.5, 2.0), "ang_vel_z": (-0.7, 0.7)},
+-  #first parameter:   {"step": 10000 * 24, "lin_vel_x": (-2.0, 3.0)},
+-  #first parameter: ]
+-  #second parameter: final velocity stage used lin_vel_x = (-2.0, 3.0)
+-  command_curriculum.params["velocity_stages"] = [
++  # 2026-09-02 stair-training update: the old absolute-iteration schedule could
++  # increase speed/backward exposure while stair performance was regressing.
++  # Start every run from a complete easy snapshot; a stateful gate below is the
++  # only path to harder commands and is restored when full training resumes.
++  twist_cmd.rel_forward_envs = 0.4
++  twist_cmd.rel_backward_envs = 0.1
++  twist_cmd.rel_heading_envs = 0.1
++  twist_cmd.ranges.lin_vel_x = (-1.0, 1.0)
++  twist_cmd.ranges.lin_vel_y = (-0.2, 0.2)
++  twist_cmd.ranges.ang_vel_z = (-0.5, 0.5)
++
++  performance_stages = [
++    {
++      "min_terrain_level": 0,
++      "lin_vel_x": (-1.0, 1.0),
++      "lin_vel_y": (-0.2, 0.2),
++      "ang_vel_z": (-0.5, 0.5),
++      "rel_forward_envs": 0.4,
++      "rel_backward_envs": 0.1,
++    },
+     {
+-      "step": 0,
+-      "lin_vel_x": (-1.0, 1.0),  #third parameter
+-      "lin_vel_y": (-0.2, 0.2),  # second parameter
++      "min_terrain_level": 3,
++      "lin_vel_x": (-1.0, 1.0),
++      "lin_vel_y": (-0.2, 0.2),
+       "ang_vel_z": (-0.5, 0.5),
++      "rel_forward_envs": 0.4,
++      "rel_backward_envs": 0.2,
+     },
+     {
+-      "step": 8000 * 24,
+-      "lin_vel_x": (-1.25, 1.25),  #third parameter
+-      "lin_vel_y": (-0.4, 0.4),  # second parameter
++      "min_terrain_level": 5,
++      "lin_vel_x": (-1.25, 1.25),
++      "lin_vel_y": (-0.4, 0.4),
+       "ang_vel_z": (-0.7, 0.7),
++      "rel_forward_envs": 0.4,
++      "rel_backward_envs": 0.2,
+     },
+     {
+-      "step": 14000 * 24,
+-      "lin_vel_x": (
+-        -_G23_MAX_FORWARD_SPEED,
+-        _G23_MAX_FORWARD_SPEED,
+-      ),  #third parameter
+-      "lin_vel_y": (-0.6, 0.6),  # second parameter
++      "min_terrain_level": 7,
++      "lin_vel_x": (-1.25, 1.25),
++      "lin_vel_y": (-0.4, 0.4),
++      "ang_vel_z": (-0.7, 0.7),
++      "rel_forward_envs": 0.4,
++      "rel_backward_envs": 0.3,
++    },
++    {
++      "min_terrain_level": 9,
++      "lin_vel_x": (-_G23_MAX_FORWARD_SPEED, _G23_MAX_FORWARD_SPEED),
++      "lin_vel_y": (-0.6, 0.6),
++      "ang_vel_z": (-0.7, 0.7),
++      "rel_forward_envs": 0.4,
++      "rel_backward_envs": 0.3,
+     },
+   ]
+ 
++  # Dict order is intentional: collect terminal performance against the old
++  # terrain level/origin before terrain_levels mutates either one.
++  terrain_curriculum = cfg.curriculum["terrain_levels"]
++  cfg.curriculum = {
++    "command_performance": CurriculumTermCfg(
++      func=mdp.PerformanceGatedVelocityCurriculum,
++      params={
++        "command_name": "twist",
++        "stages": performance_stages,
++        "terrain_names": ("pyramid_stairs", "pyramid_stairs_inv"),
++        "min_episodes_per_terrain": 256,
++        "min_directional_samples_per_terrain": 20_000,
++        "min_safe_success_rate": 0.60,
++        "min_directional_tracking_score": 0.60,
++        "warmup_steps": 1_000,
++        "min_stage_steps": 500 * 24,
++        "required_passes": 2,
++        "success_termination_name": "time_out",
++        # 2026-09-02 anti-tripod update: a policy cannot unlock harder commands
++        # while finishing episodes with one foot persistently held in the air.
++        "contact_sensor_name": "feet_ground_contact",
++        "max_foot_air_time": _G23_GATE_MAX_FOOT_AIR_TIME,
++      },
++    ),
++    "terrain_levels": terrain_curriculum,
++  }
++
+ 
+ def syncai_g23_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+   """Create SyncAI G23 rough terrain velocity configuration."""
+@@ -191,6 +240,20 @@ def syncai_g23_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+       )
+       sensor.pattern = RingPatternCfg.single_ring(radius=0.03, num_samples=4)
+ 
++  # 2026-09-02 stair-training update: measure torso clearance against the local
++  # terrain instead of using world Z, which changes between stair levels.
++  base_height_scan_cfg = TerrainHeightSensorCfg(
++    name="base_height_scan",
++    frame=ObjRef(type="body", name=_BASE_BODY_NAME, entity="robot"),
++    ray_alignment="yaw",
++    pattern=GridPatternCfg(size=(0.3, 0.4), resolution=0.05),
++    max_distance=1.0,
++    exclude_parent_body=True,
++    include_geom_groups=(0,),
++    reduction="mean",
++    debug_vis=False,
++  )
++
+   feet_ground_cfg = ContactSensorCfg(
+     name="feet_ground_contact",
+     primary=ContactMatch(mode="geom", pattern=_FOOT_GEOM_NAMES, entity="robot"),
+@@ -214,7 +277,7 @@ def syncai_g23_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+     primary=ContactMatch(mode="geom", pattern=_THIGH_GEOM_NAMES, entity="robot"),
+     secondary=ContactMatch(mode="body", pattern="terrain"),
+     fields=("found", "force"),
+-    reduce="none",
++    reduce="maxforce",
+     num_slots=1,
+     history_length=4,
+   )
+@@ -223,7 +286,7 @@ def syncai_g23_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+     primary=ContactMatch(mode="geom", pattern=_SHANK_GEOM_NAMES, entity="robot"),
+     secondary=ContactMatch(mode="body", pattern="terrain"),
+     fields=("found", "force"),
+-    reduce="none",
++    reduce="maxforce",
+     num_slots=1,
+     history_length=4,
+   )
+@@ -232,11 +295,12 @@ def syncai_g23_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+     primary=ContactMatch(mode="geom", pattern=_TORSO_GEOM_NAMES, entity="robot"),
+     secondary=ContactMatch(mode="body", pattern="terrain"),
+     fields=("found", "force"),
+-    reduce="none",
++    reduce="maxforce",
+     num_slots=1,
+     history_length=4,
+   )
+   cfg.scene.sensors = (cfg.scene.sensors or ()) + (
++    base_height_scan_cfg,
+     feet_ground_cfg,
+     self_collision_cfg,
+     thigh_ground_cfg,
+@@ -297,6 +361,20 @@ def syncai_g23_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+   )
+   cfg.events["base_com"].params["asset_cfg"].body_names = (_BASE_BODY_NAME,)
+ 
++  # 2026-09-02 stair-training update: replace the frequent mass-independent
++  # six-axis velocity kick with a sparse, short physical impulse on the torso.
++  cfg.events["push_robot"] = EventTermCfg(
++    mode="step",
++    func=envs_mdp.apply_body_impulse,
++    params={
++      "asset_cfg": SceneEntityCfg("robot", body_names=(_BASE_BODY_NAME,)),
++      "force_range": (-20.0, 20.0),
++      "torque_range": (0.0, 0.0),
++      "duration_s": (0.10, 0.15),
++      "cooldown_s": (8.0, 12.0),
++    },
++  )
++
+   cfg.rewards["pose"].params["std_standing"] = {
+     r".*_HipX_joint": 0.05,
+     r".*_HipY_joint": 0.05,
+@@ -314,29 +392,77 @@ def syncai_g23_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+   }
+ 
+   cfg.rewards["upright"].params["asset_cfg"].body_names = (_BASE_BODY_NAME,)
+-  cfg.rewards["upright"].params["terrain_sensor_names"] = ("terrain_scan",)
++  # 2026-09-02 stair-training update: stay upright relative to gravity. Aligning
++  # the torso to the stair-scan normal encouraged leaning into the staircase.
++  cfg.rewards["upright"].params.pop("terrain_sensor_names", None)
+   cfg.rewards["body_ang_vel"].params["asset_cfg"].body_names = (_BASE_BODY_NAME,)
+ 
+   for reward_name in ["foot_clearance", "foot_slip"]:
+     cfg.rewards[reward_name].params["asset_cfg"].site_names = G23_FOOT_SITE_NAMES
+ 
+-  cfg.rewards["body_ang_vel"].weight = 0.0
++  # 2026-09-02 stair-training update: tracking rewards now cover only their
++  # commanded axes; vertical/balance/smoothness costs remain explicit and tunable.
++  cfg.rewards["track_linear_velocity"].func = mdp.track_linear_velocity_xy
++  cfg.rewards["track_angular_velocity"].func = mdp.track_angular_velocity_yaw
++  cfg.rewards["body_ang_vel"].weight = -0.02
+   cfg.rewards["angular_momentum"].weight = 0.0
+   cfg.rewards["air_time"].weight = 0.0
+-  #first parameter: cfg.rewards["foot_clearance"].params["target_height"] = 0.1
+   cfg.rewards["foot_clearance"].params["target_height"] = (
+     _G23_FOOT_CLEARANCE_TARGET_HEIGHT
+-  )  # second parameter
+-  #first parameter: cfg.rewards["foot_swing_height"].params["target_height"] = 0.1
++  )
+   cfg.rewards["foot_swing_height"].params["target_height"] = (
+     _G23_FOOT_CLEARANCE_TARGET_HEIGHT
+-  )  # second parameter
+-  #first parameter: cfg.rewards["foot_clearance"].weight = -2.0
+-  cfg.rewards["foot_clearance"].weight = -3.0
+-  #first parameter: cfg.rewards["foot_swing_height"].weight = -0.25
+-  cfg.rewards["foot_swing_height"].weight = -0.75
+-  #first parameter: cfg.rewards["soft_landing"].weight = -1e-5
++  )
++  # 2026-09-02 anti-tripod update: these landing/motion-gated costs were too
++  # strong and could be avoided by lifting one foot once and never landing it.
++  cfg.rewards["foot_clearance"].weight = -0.75
++  cfg.rewards["foot_swing_height"].weight = -0.25
+   cfg.rewards["soft_landing"].weight = -5e-5
++  cfg.rewards["action_rate_l2"].weight = -0.05
++  cfg.rewards["excessive_foot_air_time"] = RewardTermCfg(
++    func=mdp.feet_excessive_air_time,
++    weight=_G23_EXCESSIVE_FOOT_AIR_TIME_WEIGHT,
++    params={
++      "sensor_name": feet_ground_cfg.name,
++      "max_air_time": _G23_MAX_FOOT_AIR_TIME,
++      "max_excess_time": _G23_MAX_FOOT_AIR_EXCESS_TIME,
++    },
++  )
++  cfg.rewards["standing_missing_foot_contacts"] = RewardTermCfg(
++    func=mdp.feet_contact_count_standing,
++    weight=_G23_STANDING_MISSING_CONTACT_WEIGHT,
++    params={
++      "sensor_name": feet_ground_cfg.name,
++      "command_name": "twist",
++      "required_contacts": len(G23_FOOT_SITE_NAMES),
++      "command_threshold": 0.05,
++    },
++  )
++  cfg.rewards["vertical_velocity_l2"] = RewardTermCfg(
++    func=mdp.vertical_velocity_l2,
++    weight=-0.5,
++  )
++  cfg.rewards["base_height_l2"] = RewardTermCfg(
++    func=mdp.base_height_l2,
++    weight=-1.0,
++    params={
++      "height_sensor_name": base_height_scan_cfg.name,
++      "target_height": _G23_BASE_HEIGHT_TARGET,
++    },
++  )
++  cfg.rewards["electrical_power"] = RewardTermCfg(
++    func=mdp.electrical_power_cost,
++    weight=-2e-5,
++    params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
++  )
++  cfg.rewards["joint_acc_l2"] = RewardTermCfg(
++    func=mdp.joint_acc_l2,
++    weight=-2.5e-7,
++  )
++  cfg.rewards["action_acc_l2"] = RewardTermCfg(
++    func=mdp.action_acc_l2,
++    weight=-0.01,
++  )
+ 
+   cfg.rewards["self_collisions"] = RewardTermCfg(
+     func=mdp.self_collision_cost,
+@@ -345,10 +471,10 @@ def syncai_g23_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+   )
+   cfg.rewards["shank_collision"] = RewardTermCfg(
+     func=mdp.self_collision_cost,
+-    weight=_G23_SHANK_COLLISION_WEIGHT,  #third parameter
++    weight=_G23_SHANK_COLLISION_WEIGHT,
+     params={
+       "sensor_name": shank_ground_cfg.name,
+-      "force_threshold": _G23_SHANK_PENALTY_FORCE_THRESHOLD,  #third parameter
++      "force_threshold": _G23_SHANK_PENALTY_FORCE_THRESHOLD,
+     },
+   )
+   cfg.rewards["torso_collision"] = RewardTermCfg(
+@@ -360,16 +486,35 @@ def syncai_g23_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+   cfg.terminations.pop("fell_over", None)
+   cfg.terminations["illegal_contact"] = TerminationTermCfg(
+     func=mdp.illegal_contact,
+-    params={"sensor_name": thigh_ground_cfg.name},
++    params={
++      "sensor_name": thigh_ground_cfg.name,
++      "force_threshold": _G23_THIGH_TERMINATION_FORCE_THRESHOLD,
++      "history_count_threshold": _G23_THIGH_TERMINATION_HISTORY_COUNT,
++    },
+   )
+-  #first parameter: no shank ground-contact termination
+-  #second parameter: shank ground-contact termination used default force_threshold=10.0
++  # 2026-09-02 stair-training update: recoverable leg brushes are penalized, but
++  # only sustained hard contacts terminate; actual torso support terminates sooner.
+   cfg.terminations["shank_illegal_contact"] = TerminationTermCfg(
+     func=mdp.illegal_contact,
+     params={
+       "sensor_name": shank_ground_cfg.name,
+-      "force_threshold": _G23_SHANK_TERMINATION_FORCE_THRESHOLD,  #third parameter
+-      "history_count_threshold": _G23_SHANK_TERMINATION_HISTORY_COUNT,  #third parameter
++      "force_threshold": _G23_SHANK_TERMINATION_FORCE_THRESHOLD,
++      "history_count_threshold": _G23_SHANK_TERMINATION_HISTORY_COUNT,
++    },
++  )
++  cfg.terminations["torso_illegal_contact"] = TerminationTermCfg(
++    func=mdp.illegal_contact,
++    params={
++      "sensor_name": torso_ground_cfg.name,
++      "force_threshold": _G23_TORSO_TERMINATION_FORCE_THRESHOLD,
++      "history_count_threshold": _G23_TORSO_TERMINATION_HISTORY_COUNT,
++    },
++  )
++  cfg.terminations["prolonged_foot_air_time"] = TerminationTermCfg(
++    func=mdp.prolonged_foot_air_time,
++    params={
++      "sensor_name": feet_ground_cfg.name,
++      "max_air_time": _G23_TERMINATION_MAX_FOOT_AIR_TIME,
+     },
+   )
+ 
+@@ -396,8 +541,75 @@ def syncai_g23_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+   return cfg
+ 
+ 
++def syncai_g23_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
++  """Create SyncAI G23 flat terrain velocity configuration."""
++  cfg = syncai_g23_rough_env_cfg(play=play)
++
++  cfg.sim.njmax = 300
++  cfg.sim.mujoco.ccd_iterations = 50
++  cfg.sim.contact_sensor_maxmatch = 64
++  cfg.sim.nconmax = None
++
++  assert cfg.scene.terrain is not None
++  cfg.scene.terrain.terrain_type = "plane"
++  cfg.scene.terrain.terrain_generator = None
++
++  remove_sensors = {
++    "terrain_scan",
++    "self_collision",
++    "thigh_ground_touch",
++    "shank_ground_touch",
++    "torso_ground_touch",
++  }
++  cfg.scene.sensors = tuple(
++    sensor for sensor in (cfg.scene.sensors or ()) if sensor.name not in remove_sensors
++  )
++  cfg.observations["actor"].terms.pop("height_scan", None)
++  cfg.observations["critic"].terms.pop("height_scan", None)
++  cfg.rewards["upright"].params.pop("terrain_sensor_names", None)
++
++  for reward_name in ("self_collisions", "shank_collision", "torso_collision"):
++    cfg.rewards.pop(reward_name, None)
++
++  cfg.terminations.pop("illegal_contact", None)
++  cfg.terminations.pop("shank_illegal_contact", None)
++  cfg.terminations.pop("torso_illegal_contact", None)
++  cfg.terminations.pop("out_of_terrain_bounds", None)
++  cfg.terminations["fell_over"] = TerminationTermCfg(
++    func=mdp.bad_orientation,
++    params={"limit_angle": math.radians(70.0)},
++  )
++
++  # The flat compatibility/fine-tuning task keeps the stage-0 command snapshot,
++  # but has no stair evidence with which to advance the performance gate.
++  cfg.curriculum.pop("command_performance", None)
++  cfg.curriculum.pop("terrain_levels", None)
++
++  return cfg
++
++
+ def syncai_g23_rough_proprio_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+-  """Create SyncAI G23 rough terrain config with RL-train policy observations."""
++  """Create SyncAI G23 rough terrain config with compact proprioception."""
+   cfg = syncai_g23_rough_env_cfg(play=play)
+-  _set_rl_train_policy_observation_order(cfg)
++  _set_g23_proprio_observation_order(cfg)
++  return cfg
++
++
++def syncai_g23_rough_proprio_history6_env_cfg(
++  play: bool = False,
++) -> ManagerBasedRlEnvCfg:
++  """Create the G23 stair task with six proprioceptive frames for the actor."""
++  cfg = syncai_g23_rough_proprio_env_cfg(play=play)
++  # 2026-09-02 stair-training update: history is a separate task because a
++  # 270-D actor cannot load the existing 45-D proprioceptive checkpoints.
++  actor = cfg.observations["actor"]
++  actor.history_length = 6
++  actor.flatten_history_dim = True
++  return cfg
++
++
++def syncai_g23_flat_proprio_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
++  """Create SyncAI G23 flat terrain config with compact proprioception."""
++  cfg = syncai_g23_flat_env_cfg(play=play)
++  _set_g23_proprio_observation_order(cfg)
+   return cfg
+diff --git a/src/mjlab/tasks/velocity/config/g23/rl_cfg.py b/src/mjlab/tasks/velocity/config/g23/rl_cfg.py
+index 4c9142a..b7cba33 100644
+--- a/src/mjlab/tasks/velocity/config/g23/rl_cfg.py
++++ b/src/mjlab/tasks/velocity/config/g23/rl_cfg.py
+@@ -42,6 +42,10 @@ def syncai_g23_ppo_runner_cfg(
+       max_grad_norm=1.0,
+     ),
+     experiment_name=experiment_name,
++    # Keep raw policy actions and the actor's previous-action observation bounded.
++    # This still leaves ample range for G23 joint targets while preventing a rare
++    # action outlier from destabilizing the observation normalizer and value loss.
++    clip_actions=5.0,
+     save_interval=50,
+     num_steps_per_env=24,
+     max_iterations=10_000,
+diff --git a/src/mjlab/tasks/velocity/mdp/curriculums.py b/src/mjlab/tasks/velocity/mdp/curriculums.py
+index 3ae1d46..24bafc4 100644
+--- a/src/mjlab/tasks/velocity/mdp/curriculums.py
++++ b/src/mjlab/tasks/velocity/mdp/curriculums.py
+@@ -1,25 +1,56 @@
+ from __future__ import annotations
+ 
+-from typing import TYPE_CHECKING, TypedDict, cast
++import math
++from collections.abc import Callable, Mapping
++from copy import deepcopy
++from typing import TYPE_CHECKING, Any, TypedDict, cast
+ 
+ import torch
++from typing_extensions import NotRequired
+ 
+ from mjlab.entity import Entity
+ from mjlab.managers.scene_entity_config import SceneEntityCfg
++from mjlab.sensor import ContactSensor
+ 
+-from .velocity_command import UniformVelocityCommandCfg
++from .velocity_command import (
++  UniformVelocityCommandCfg,
++  _validate_directional_bucket_fractions,
++)
+ 
+ if TYPE_CHECKING:
+   from mjlab.envs import ManagerBasedRlEnv
++  from mjlab.managers.curriculum_manager import CurriculumTermCfg
+ 
+ _DEFAULT_SCENE_CFG = SceneEntityCfg("robot")
+ 
+ 
+ class VelocityStage(TypedDict):
+   step: int
+-  lin_vel_x: tuple[float, float] | None
+-  lin_vel_y: tuple[float, float] | None
+-  ang_vel_z: tuple[float, float] | None
++  lin_vel_x: NotRequired[tuple[float, float] | None]
++  lin_vel_y: NotRequired[tuple[float, float] | None]
++  ang_vel_z: NotRequired[tuple[float, float] | None]
++  rel_backward_envs: NotRequired[float]
++
++
++# 2026-09-02 stair-training update: every performance stage is a complete
++# command snapshot.  Reapplying any stage after checkpoint restore therefore
++# does not depend on mutations made by earlier stages.
++class PerformanceVelocityStage(TypedDict):
++  min_terrain_level: int
++  lin_vel_x: tuple[float, float]
++  lin_vel_y: tuple[float, float]
++  ang_vel_z: tuple[float, float]
++  rel_forward_envs: float
++  rel_backward_envs: float
++
++
++class _TerrainPerformance(TypedDict):
++  episode_count: int
++  safe_success_count: int
++  forward_tracking_sum: float
++  forward_tracking_count: int
++  backward_tracking_sum: float
++  backward_tracking_count: int
+ 
+ 
+ def terrain_levels_vel(
+@@ -106,6 +137,10 @@ def commands_vel(
+         cfg.ranges.lin_vel_y = stage["lin_vel_y"]
+       if "ang_vel_z" in stage and stage["ang_vel_z"] is not None:
+         cfg.ranges.ang_vel_z = stage["ang_vel_z"]
++      if "rel_backward_envs" in stage:
++        rel_backward_envs = stage["rel_backward_envs"]
++        _validate_directional_bucket_fractions(cfg.rel_forward_envs, rel_backward_envs)
++        cfg.rel_backward_envs = rel_backward_envs
+   return {
+     "lin_vel_x_min": torch.tensor(cfg.ranges.lin_vel_x[0]),
+     "lin_vel_x_max": torch.tensor(cfg.ranges.lin_vel_x[1]),
+@@ -113,4 +148,540 @@ def commands_vel(
+     "lin_vel_y_max": torch.tensor(cfg.ranges.lin_vel_y[1]),
+     "ang_vel_z_min": torch.tensor(cfg.ranges.ang_vel_z[0]),
+     "ang_vel_z_max": torch.tensor(cfg.ranges.ang_vel_z[1]),
++    "rel_backward_envs": torch.tensor(cfg.rel_backward_envs),
+   }
++
++
++# 2026-09-02 stair-training update: replace wall-clock-only G23 command
++# progression with a checkpointable gate driven by completed stair episodes.
++class PerformanceGatedVelocityCurriculum:
++  """Advance complete velocity-command stages after sustained stair performance.
++
++  The term must be placed before ``terrain_levels_vel`` in the curriculum mapping:
++  it reads the just-finished episode's terrain origin and difficulty before that
++  term moves the environment to its next patch.  Directional tracking statistics
++  are accumulated by :class:`UniformVelocityCommand` over every command segment.
++
++  ``stages[0]`` is applied at construction.  To enter each later stage, both the
++  safe traversal rate and forward/backward tracking scores must pass for every
++  configured terrain type for ``required_passes`` independent windows.  At most
++  one stage is entered per call.
++  """
++
++  _STATE_VERSION = 1
++  _WINDOW_FIELDS = (
++    "episode_count",
++    "safe_success_count",
++    "forward_tracking_sum",
++    "forward_tracking_count",
++    "backward_tracking_sum",
++    "backward_tracking_count",
++  )
++
++  def __init__(self, cfg: CurriculumTermCfg, env: ManagerBasedRlEnv):
++    params = cfg.params
++    self._env = env
++    self._command_name = str(params["command_name"])
++    self._stages = deepcopy(cast(list[PerformanceVelocityStage], params["stages"]))
++    self._terrain_names = tuple(str(name) for name in params["terrain_names"])
++    self._min_episodes_per_terrain = int(params["min_episodes_per_terrain"])
++    self._min_directional_samples_per_terrain = int(
++      params["min_directional_samples_per_terrain"]
++    )
++    self._min_safe_success_rate = float(params["min_safe_success_rate"])
++    self._min_directional_tracking_score = float(
++      params["min_directional_tracking_score"]
++    )
++    self._warmup_steps = int(params.get("warmup_steps", 0))
++    self._min_stage_steps = int(params.get("min_stage_steps", 0))
++    self._required_passes = int(params.get("required_passes", 1))
++    self._success_termination_name = str(
++      params.get("success_termination_name", "time_out")
++    )
++    self._asset_cfg = cast(SceneEntityCfg, params.get("asset_cfg", _DEFAULT_SCENE_CFG))
++
++    # 2026-09-02 anti-tripod update: optionally reject completed episodes whose
++    # terminal state still has a foot that has been continuously airborne too long.
++    contact_sensor_name = params.get("contact_sensor_name")
++    max_foot_air_time = params.get("max_foot_air_time")
++    if (contact_sensor_name is None) != (max_foot_air_time is None):
++      raise ValueError(
++        "contact_sensor_name and max_foot_air_time must be configured together."
++      )
++    self._contact_sensor: ContactSensor | None = None
++    self._max_foot_air_time: float | None = None
++    if contact_sensor_name is not None:
++      if not isinstance(contact_sensor_name, str) or not contact_sensor_name:
++        raise TypeError("contact_sensor_name must be a non-empty string.")
++      if (
++        not isinstance(max_foot_air_time, (int, float))
++        or isinstance(max_foot_air_time, bool)
++        or not math.isfinite(max_foot_air_time)
++        or max_foot_air_time <= 0.0
++      ):
++        raise ValueError("max_foot_air_time must be a positive finite number.")
++      contact_sensor = env.scene[contact_sensor_name]
++      if not isinstance(contact_sensor, ContactSensor):
++        raise TypeError(
++          f"Sensor '{contact_sensor_name}' must be a ContactSensor for foot health."
++        )
++      if contact_sensor.data.current_air_time is None:
++        raise ValueError(
++          f"Sensor '{contact_sensor_name}' must enable track_air_time for foot health."
++        )
++      self._contact_sensor = contact_sensor
++      self._max_foot_air_time = float(max_foot_air_time)
++
++    command_term = env.command_manager.get_term(self._command_name)
++    if command_term is None or not isinstance(
++      command_term.cfg, UniformVelocityCommandCfg
++    ):
++      raise TypeError(
++        f"Command '{self._command_name}' must use UniformVelocityCommandCfg."
++      )
++    directional_stats = getattr(command_term, "get_directional_tracking_stats", None)
++    if not callable(directional_stats):
++      raise TypeError(
++        f"Command '{self._command_name}' does not expose directional tracking stats."
++      )
++    self._directional_stats = cast(
++      Callable[[torch.Tensor], dict[str, torch.Tensor]], directional_stats
++    )
++    refresh_command = getattr(command_term, "resample_after_curriculum_restore", None)
++    if not callable(refresh_command):
++      raise TypeError(
++        f"Command '{self._command_name}' cannot refresh commands after resume."
++      )
++    self._refresh_command = cast(Callable[[], None], refresh_command)
++    self._command_cfg = command_term.cfg
++
++    self._asset: Entity = env.scene[self._asset_cfg.name]
++    terrain = env.scene.terrain
++    if terrain is None:
++      raise ValueError(
++        "Performance-gated velocity curriculum requires initialized generated terrain."
++      )
++    self._terrain = terrain
++    terrain_origins = getattr(self._terrain, "terrain_origins", None)
++    terrain_levels = getattr(self._terrain, "terrain_levels", None)
++    terrain_types = getattr(self._terrain, "terrain_types", None)
++    terrain_env_origins = getattr(self._terrain, "env_origins", None)
++    if not all(
++      isinstance(value, torch.Tensor)
++      for value in (
++        terrain_origins,
++        terrain_levels,
++        terrain_types,
++        terrain_env_origins,
++      )
++    ):
++      raise ValueError(
++        "Performance-gated velocity curriculum requires initialized generated terrain."
++      )
++    self._terrain_origins = cast(torch.Tensor, terrain_origins)
++    self._terrain_levels = cast(torch.Tensor, terrain_levels)
++    self._terrain_types = cast(torch.Tensor, terrain_types)
++    self._terrain_env_origins = cast(torch.Tensor, terrain_env_origins)
++    terrain_generator = terrain.cfg.terrain_generator
++    if terrain_generator is None:
++      raise ValueError(
++        "Performance-gated velocity curriculum requires a terrain generator."
++      )
++    self._terrain_generator = terrain_generator
++    terrain_type_names = tuple(terrain_generator.sub_terrains)
++    if self._terrain_origins.shape[1] != len(terrain_type_names):
++      raise ValueError(
++        "Performance-gated velocity curriculum requires one terrain column per type."
++      )
++    self._terrain_type_ids: dict[str, int] = {}
++    for terrain_name in self._terrain_names:
++      if terrain_name not in terrain_type_names:
++        raise ValueError(f"Unknown curriculum terrain name '{terrain_name}'.")
++      self._terrain_type_ids[terrain_name] = terrain_type_names.index(terrain_name)
++
++    self._validate_configuration()
++    # Fail at environment construction instead of midway through training when
++    # the configured successful termination term is misspelled or is not a timeout.
++    env.termination_manager.get_term(self._success_termination_name)
++    success_cfg = env.termination_manager.get_term_cfg(self._success_termination_name)
++    if not success_cfg.time_out:
++      raise ValueError(
++        f"Success termination '{self._success_termination_name}' must be a timeout."
++      )
++    self._competing_termination_names = tuple(
++      name
++      for name in env.termination_manager.active_terms
++      if name != self._success_termination_name
++    )
++
++    self._stage_index = 0
++    self._stage_enter_step = int(env.common_step_counter)
++    self._pass_streak = 0
++    self._window = self._empty_window()
++    self._last_window = self._empty_window()
++    self._last_window_passed = False
++    self._last_evaluation_step = -1
++    # 2026-09-02 stair-training update: only episodes that started in the
++    # current stage may contribute evidence for that stage.
++    self._episode_stage_index = torch.zeros_like(self._terrain_levels)
++    self._apply_stage(self._stage_index)
++
++  @property
++  def stage_index(self) -> int:
++    return self._stage_index
++
++  def __call__(
++    self,
++    env: ManagerBasedRlEnv,
++    env_ids: torch.Tensor,
++    **_: Any,
++  ) -> dict[str, torch.Tensor]:
++    if env is not self._env:
++      raise ValueError("Curriculum term called with a different environment instance.")
++    if env_ids.numel() == 0 or self._stage_index >= len(self._stages) - 1:
++      return self._logging_state(env.common_step_counter)
++    if env.common_step_counter < self._warmup_steps:
++      return self._logging_state(env.common_step_counter)
++
++    valid = env.episode_length_buf[env_ids] > 0
++    reset_buf = getattr(env, "reset_buf", None)
++    if isinstance(reset_buf, torch.Tensor):
++      valid &= reset_buf[env_ids]
++    completed_ids = env_ids[valid]
++    if completed_ids.numel() == 0:
++      return self._logging_state(env.common_step_counter)
++
++    stage_completed_ids = completed_ids[
++      self._episode_stage_index[completed_ids] == self._stage_index
++    ]
++    if stage_completed_ids.numel() > 0:
++      self._accumulate_completed_episodes(env, stage_completed_ids)
++
++    stage_age = env.common_step_counter - self._stage_enter_step
++    if stage_age >= self._min_stage_steps and self._window_ready():
++      passed = self._window_passes()
++      self._last_window = deepcopy(self._window)
++      self._last_window_passed = passed
++      self._last_evaluation_step = int(env.common_step_counter)
++      self._window = self._empty_window()
++      self._pass_streak = self._pass_streak + 1 if passed else 0
++
++      if self._pass_streak >= self._required_passes:
++        self._stage_index += 1
++        self._stage_enter_step = int(env.common_step_counter)
++        self._pass_streak = 0
++        self._apply_stage(self._stage_index)
++
++    # Curriculum runs before command reset.  Label the episodes that are about
++    # to start with the stage whose command configuration they will sample.
++    self._episode_stage_index[completed_ids] = self._stage_index
++
++    return self._logging_state(env.common_step_counter)
++
++  def state_dict(self) -> dict[str, Any]:
++    """Return portable state containing only completed-episode statistics."""
++    return {
++      "version": self._STATE_VERSION,
++      "stage_count": len(self._stages),
++      "terrain_names": self._terrain_names,
++      "stage_index": self._stage_index,
++      "stage_enter_step": self._stage_enter_step,
++      "pass_streak": self._pass_streak,
++      "window": deepcopy(self._window),
++      "last_window": deepcopy(self._last_window),
++      "last_window_passed": self._last_window_passed,
++      "last_evaluation_step": self._last_evaluation_step,
++    }
++
++  def load_state_dict(self, state: Mapping[str, Any]) -> None:
++    """Atomically restore gate progress and reapply the complete command stage."""
++    if not isinstance(state, Mapping):
++      raise TypeError("Performance curriculum state must be a mapping.")
++    if state.get("version") != self._STATE_VERSION:
++      raise ValueError("Performance curriculum state version does not match.")
++    if state.get("stage_count") != len(self._stages):
++      raise ValueError("Performance curriculum stage count does not match.")
++    saved_terrain_names = state.get("terrain_names")
++    if (
++      not isinstance(saved_terrain_names, (tuple, list))
++      or tuple(saved_terrain_names) != self._terrain_names
++    ):
++      raise ValueError("Performance curriculum terrain names do not match.")
++
++    stage_index = self._checked_int(state, "stage_index", minimum=0)
++    if stage_index >= len(self._stages):
++      raise ValueError("Performance curriculum stage index is out of range.")
++    stage_enter_step = self._checked_int(state, "stage_enter_step", minimum=0)
++    pass_streak = self._checked_int(state, "pass_streak", minimum=0)
++    if pass_streak >= self._required_passes:
++      raise ValueError("Performance curriculum pass streak is out of range.")
++    last_evaluation_step = self._checked_int(state, "last_evaluation_step", minimum=-1)
++    last_window_passed = state.get("last_window_passed")
++    if not isinstance(last_window_passed, bool):
++      raise TypeError("Performance curriculum last_window_passed must be bool.")
++    window = self._validated_window(state.get("window"), name="window")
++    last_window = self._validated_window(state.get("last_window"), name="last_window")
++
++    # Commit only after every field has validated.
++    self._stage_index = stage_index
++    self._stage_enter_step = stage_enter_step
++    self._pass_streak = pass_streak
++    self._window = window
++    self._last_window = last_window
++    self._last_window_passed = last_window_passed
++    self._last_evaluation_step = last_evaluation_step
++    self._apply_stage(self._stage_index)
++    # 2026-09-02 stair-training update: the wrapper reset happened at stage 0;
++    # refresh live commands so the first resumed rollout uses the restored stage.
++    self._episode_stage_index.fill_(self._stage_index)
++    self._refresh_command()
++
++  def _validate_configuration(self) -> None:
++    if not self._stages:
++      raise ValueError("Performance velocity curriculum requires at least one stage.")
++    if not self._terrain_names or len(set(self._terrain_names)) != len(
++      self._terrain_names
++    ):
++      raise ValueError("terrain_names must be non-empty and unique.")
++    if self._min_episodes_per_terrain <= 0:
++      raise ValueError("min_episodes_per_terrain must be positive.")
++    if self._min_directional_samples_per_terrain <= 0:
++      raise ValueError("min_directional_samples_per_terrain must be positive.")
++    for name, value in (
++      ("min_safe_success_rate", self._min_safe_success_rate),
++      ("min_directional_tracking_score", self._min_directional_tracking_score),
++    ):
++      if not math.isfinite(value) or not 0.0 <= value <= 1.0:
++        raise ValueError(f"{name} must be finite and within [0, 1].")
++    if self._warmup_steps < 0:
++      raise ValueError("warmup_steps must be non-negative.")
++    if self._min_stage_steps < 0:
++      raise ValueError("min_stage_steps must be non-negative.")
++    if self._required_passes <= 0:
++      raise ValueError("required_passes must be positive.")
++
++    max_terrain_level = int(self._terrain_origins.shape[0]) - 1
++    previous_level = -1
++    required_fields = set(PerformanceVelocityStage.__required_keys__)
++    for index, stage in enumerate(self._stages):
++      missing = required_fields - stage.keys()
++      if missing:
++        raise KeyError(
++          f"Performance stage {index} is missing fields {sorted(missing)}."
++        )
++      level = stage["min_terrain_level"]
++      if not isinstance(level, int) or isinstance(level, bool):
++        raise TypeError(f"Performance stage {index} min_terrain_level must be int.")
++      if not 0 <= level <= max_terrain_level:
++        raise ValueError(
++          f"Performance stage {index} min_terrain_level must be within "
++          f"[0, {max_terrain_level}]."
++        )
++      if level < previous_level:
++        raise ValueError("Performance stage terrain levels must be nondecreasing.")
++      previous_level = level
++      for range_name in ("lin_vel_x", "lin_vel_y", "ang_vel_z"):
++        value = stage[range_name]
++        if (
++          len(value) != 2
++          or not all(math.isfinite(float(bound)) for bound in value)
++          or value[0] > value[1]
++        ):
++          raise ValueError(f"Performance stage {index} has invalid {range_name}.")
++      _validate_directional_bucket_fractions(
++        stage["rel_forward_envs"], stage["rel_backward_envs"]
++      )
++
++  def _apply_stage(self, stage_index: int) -> None:
++    stage = self._stages[stage_index]
++    self._command_cfg.ranges.lin_vel_x = tuple(stage["lin_vel_x"])
++    self._command_cfg.ranges.lin_vel_y = tuple(stage["lin_vel_y"])
++    self._command_cfg.ranges.ang_vel_z = tuple(stage["ang_vel_z"])
++    self._command_cfg.rel_forward_envs = float(stage["rel_forward_envs"])
++    self._command_cfg.rel_backward_envs = float(stage["rel_backward_envs"])
++
++  def _accumulate_completed_episodes(
++    self, env: ManagerBasedRlEnv, env_ids: torch.Tensor
++  ) -> None:
++    next_level = self._stages[self._stage_index + 1]["min_terrain_level"]
++    terrain_types = self._terrain_types[env_ids]
++    terrain_levels = self._terrain_levels[env_ids]
++    distance = torch.norm(
++      self._asset.data.root_link_pos_w[env_ids, :2]
++      - self._terrain_env_origins[env_ids, :2],
++      dim=1,
++    )
++    made_progress = distance > self._terrain_generator.size[0] / 2
++    completed_safely = env.termination_manager.get_term(self._success_termination_name)[
++      env_ids
++    ].clone()
++    # 2026-09-02 stair-training update: the designated horizon timeout must
++    # fire alone; simultaneous falls, illegal contacts, terrain exits, or any
++    # other termination/truncation remain failures.
++    for term_name in self._competing_termination_names:
++      completed_safely &= ~env.termination_manager.get_term(term_name)[env_ids]
++    if self._contact_sensor is not None:
++      foot_air_time = self._contact_sensor.data.current_air_time
++      assert foot_air_time is not None
++      assert self._max_foot_air_time is not None
++      healthy_foot_usage = torch.all(
++        foot_air_time[env_ids].reshape(len(env_ids), -1) <= self._max_foot_air_time,
++        dim=1,
++      )
++      completed_safely &= healthy_foot_usage
++    safe_success = made_progress & completed_safely
++    directional = self._directional_stats(env_ids)
++
++    for terrain_name, terrain_type_id in self._terrain_type_ids.items():
++      eligible = (terrain_types == terrain_type_id) & (terrain_levels >= next_level)
++      if not eligible.any():
++        continue
++      bucket = self._window[terrain_name]
++      bucket["episode_count"] += int(eligible.sum().item())
++      bucket["safe_success_count"] += int(safe_success[eligible].sum().item())
++      bucket["forward_tracking_sum"] += float(
++        directional["forward_tracking_sum"][eligible].sum().item()
++      )
++      bucket["forward_tracking_count"] += int(
++        directional["forward_tracking_count"][eligible].sum().item()
++      )
++      bucket["backward_tracking_sum"] += float(
++        directional["backward_tracking_sum"][eligible].sum().item()
++      )
++      bucket["backward_tracking_count"] += int(
++        directional["backward_tracking_count"][eligible].sum().item()
++      )
++
++  def _window_ready(self) -> bool:
++    for bucket in self._window.values():
++      if bucket["episode_count"] < self._min_episodes_per_terrain:
++        return False
++      if (
++        bucket["forward_tracking_count"] < self._min_directional_samples_per_terrain
++        or bucket["backward_tracking_count"] < self._min_directional_samples_per_terrain
++      ):
++        return False
++    return True
++
++  def _window_passes(self) -> bool:
++    for bucket in self._window.values():
++      success_rate = bucket["safe_success_count"] / bucket["episode_count"]
++      forward_score = bucket["forward_tracking_sum"] / bucket["forward_tracking_count"]
++      backward_score = (
++        bucket["backward_tracking_sum"] / bucket["backward_tracking_count"]
++      )
++      if success_rate < self._min_safe_success_rate:
++        return False
++      if min(forward_score, backward_score) < self._min_directional_tracking_score:
++        return False
++    return True
++
++  def _empty_window(self) -> dict[str, _TerrainPerformance]:
++    return {
++      name: {
++        "episode_count": 0,
++        "safe_success_count": 0,
++        "forward_tracking_sum": 0.0,
++        "forward_tracking_count": 0,
++        "backward_tracking_sum": 0.0,
++        "backward_tracking_count": 0,
++      }
++      for name in self._terrain_names
++    }
++
++  def _logging_state(self, step: int) -> dict[str, torch.Tensor]:
++    state = {
++      "stage": torch.tensor(self._stage_index),
++      "stage_steps": torch.tensor(max(0, step - self._stage_enter_step)),
++      "pass_streak": torch.tensor(self._pass_streak),
++      "last_window_passed": torch.tensor(float(self._last_window_passed)),
++    }
++    if self._stage_index < len(self._stages) - 1:
++      state["next_min_terrain_level"] = torch.tensor(
++        self._stages[self._stage_index + 1]["min_terrain_level"]
++      )
++    for terrain_name, bucket in self._window.items():
++      episodes = bucket["episode_count"]
++      forward_count = bucket["forward_tracking_count"]
++      backward_count = bucket["backward_tracking_count"]
++      state[f"{terrain_name}/episodes"] = torch.tensor(episodes)
++      state[f"{terrain_name}/safe_success_rate"] = torch.tensor(
++        bucket["safe_success_count"] / episodes if episodes else 0.0
++      )
++      state[f"{terrain_name}/forward_tracking_score"] = torch.tensor(
++        bucket["forward_tracking_sum"] / forward_count if forward_count else 0.0
++      )
++      state[f"{terrain_name}/backward_tracking_score"] = torch.tensor(
++        bucket["backward_tracking_sum"] / backward_count if backward_count else 0.0
++      )
++    # 2026-09-02 stair-training update: an evaluated window is cleared before
++    # logging, so retain its exact gate evidence under stable ``last/`` keys.
++    for terrain_name, bucket in self._last_window.items():
++      episodes = bucket["episode_count"]
++      forward_count = bucket["forward_tracking_count"]
++      backward_count = bucket["backward_tracking_count"]
++      state[f"last/{terrain_name}/episodes"] = torch.tensor(episodes)
++      state[f"last/{terrain_name}/safe_success_rate"] = torch.tensor(
++        bucket["safe_success_count"] / episodes if episodes else 0.0
++      )
++      state[f"last/{terrain_name}/forward_tracking_score"] = torch.tensor(
++        bucket["forward_tracking_sum"] / forward_count if forward_count else 0.0
++      )
++      state[f"last/{terrain_name}/backward_tracking_score"] = torch.tensor(
++        bucket["backward_tracking_sum"] / backward_count if backward_count else 0.0
++      )
++    return state
++
++  @staticmethod
++  def _checked_int(state: Mapping[str, Any], key: str, minimum: int) -> int:
++    value = state.get(key)
++    if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
++      raise ValueError(f"Performance curriculum {key} must be an int >= {minimum}.")
++    return value
++
++  def _validated_window(
++    self, value: Any, *, name: str
++  ) -> dict[str, _TerrainPerformance]:
++    if not isinstance(value, Mapping) or set(value) != set(self._terrain_names):
++      raise ValueError(f"Performance curriculum {name} terrain buckets do not match.")
++    result = self._empty_window()
++    integer_fields = {
++      "episode_count",
++      "safe_success_count",
++      "forward_tracking_count",
++      "backward_tracking_count",
++    }
++    for terrain_name in self._terrain_names:
++      raw_bucket = value[terrain_name]
++      if not isinstance(raw_bucket, Mapping) or set(raw_bucket) != set(
++        self._WINDOW_FIELDS
++      ):
++        raise ValueError(f"Performance curriculum {name}/{terrain_name} is invalid.")
++      bucket = result[terrain_name]
++      for field in self._WINDOW_FIELDS:
++        raw = raw_bucket[field]
++        if field in integer_fields:
++          if not isinstance(raw, int) or isinstance(raw, bool) or raw < 0:
++            raise ValueError(
++              f"Performance curriculum {name}/{terrain_name}/{field} is invalid."
++            )
++          bucket[field] = raw
++        else:
++          if not isinstance(raw, (int, float)) or not math.isfinite(raw) or raw < 0:
++            raise ValueError(
++              f"Performance curriculum {name}/{terrain_name}/{field} is invalid."
++            )
++          bucket[field] = float(raw)
++      if bucket["safe_success_count"] > bucket["episode_count"]:
++        raise ValueError(
++          f"Performance curriculum {name}/{terrain_name} has excess successes."
++        )
++      if bucket["forward_tracking_sum"] > bucket["forward_tracking_count"] + 1e-6:
++        raise ValueError(
++          f"Performance curriculum {name}/{terrain_name} has invalid forward score."
++        )
++      if bucket["backward_tracking_sum"] > bucket["backward_tracking_count"] + 1e-6:
++        raise ValueError(
++          f"Performance curriculum {name}/{terrain_name} has invalid backward score."
++        )
++    return result
+diff --git a/src/mjlab/tasks/velocity/mdp/rewards.py b/src/mjlab/tasks/velocity/mdp/rewards.py
+index 12fc9d9..67dc02d 100644
+--- a/src/mjlab/tasks/velocity/mdp/rewards.py
++++ b/src/mjlab/tasks/velocity/mdp/rewards.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++import math
+ from typing import TYPE_CHECKING
+ 
+ import numpy as np
+@@ -64,6 +65,62 @@ def track_angular_velocity(
+   return torch.exp(-ang_vel_error / std**2)
+ 
+ 
++# 2026-09-02 stair-training update: decouple task tracking from base-motion costs.
++def track_linear_velocity_xy(
++  env: ManagerBasedRlEnv,
++  std: float,
++  command_name: str,
++  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++) -> torch.Tensor:
++  """Reward commanded base linear-velocity tracking on the XY axes only."""
++  asset: Entity = env.scene[asset_cfg.name]
++  command = env.command_manager.get_command(command_name)
++  assert command is not None, f"Command '{command_name}' not found."
++  error = torch.sum(
++    torch.square(command[:, :2] - asset.data.root_link_lin_vel_b[:, :2]), dim=1
++  )
++  return torch.exp(-error / std**2)
++
++
++def track_angular_velocity_yaw(
++  env: ManagerBasedRlEnv,
++  std: float,
++  command_name: str,
++  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++) -> torch.Tensor:
++  """Reward commanded base angular-velocity tracking on the yaw axis only."""
++  asset: Entity = env.scene[asset_cfg.name]
++  command = env.command_manager.get_command(command_name)
++  assert command is not None, f"Command '{command_name}' not found."
++  error = torch.square(command[:, 2] - asset.data.root_link_ang_vel_b[:, 2])
++  return torch.exp(-error / std**2)
++
++
++def vertical_velocity_l2(
++  env: ManagerBasedRlEnv,
++  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++) -> torch.Tensor:
++  """Penalize squared base vertical velocity in the body frame."""
++  asset: Entity = env.scene[asset_cfg.name]
++  return torch.square(asset.data.root_link_lin_vel_b[:, 2])
++
++
++def base_height_l2(
++  env: ManagerBasedRlEnv,
++  target_height: float,
++  height_sensor_name: str,
++) -> torch.Tensor:
++  """Penalize squared base-clearance error relative to the local terrain."""
++  height_sensor = env.scene[height_sensor_name]
++  assert isinstance(height_sensor, TerrainHeightSensor), (
++    f"base_height_l2 requires a TerrainHeightSensor, got {type(height_sensor).__name__}"
++  )
++  heights = height_sensor.data.heights
++  if heights.ndim > 1:
++    heights = torch.mean(heights, dim=tuple(range(1, heights.ndim)))
++  return torch.square(heights - target_height)
++
++
+ class upright:
+   """Reward for keeping the base upright.
+ 
+@@ -238,6 +295,165 @@ def feet_air_time(
+   return reward
+ 
+ 
++# 2026-09-02 anti-tripod update: continuously penalize a foot that stays airborne.
++def feet_excessive_air_time(
++  env: ManagerBasedRlEnv,
++  sensor_name: str,
++  max_air_time: float,
++  max_excess_time: float,
++) -> torch.Tensor:
++  """Penalize each foot's air time beyond a safe duration.
++
++  The per-foot cost is ``clamp(current_air_time - max_air_time, 0,
++  max_excess_time) ** 2``.  It is continuous at ``max_air_time`` and bounded,
++  so a permanently lifted foot remains costly without producing unbounded PPO
++  advantages.  ``current_air_time`` is already tracked per primary contact,
++  independent of the sensor's number of contact slots.
++  """
++  if not math.isfinite(max_air_time) or max_air_time < 0.0:
++    raise ValueError(
++      f"max_air_time must be finite and non-negative, got {max_air_time}"
++    )
++  if not math.isfinite(max_excess_time) or max_excess_time <= 0.0:
++    raise ValueError(
++      f"max_excess_time must be finite and positive, got {max_excess_time}"
++    )
++
++  sensor: ContactSensor = env.scene[sensor_name]
++  current_air_time = sensor.data.current_air_time
++  if current_air_time is None:
++    raise RuntimeError(
++      f"Contact sensor '{sensor_name}' must set track_air_time=True for "
++      "feet_excessive_air_time"
++    )
++  if current_air_time.ndim != 2:
++    raise ValueError(
++      f"Contact sensor '{sensor_name}' current_air_time must have shape [B, P], "
++      f"got {tuple(current_air_time.shape)}"
++    )
++
++  primary_names = tuple(sensor.primary_names)
++  if not primary_names:
++    raise ValueError(f"Contact sensor '{sensor_name}' has no primary contacts")
++  if current_air_time.shape[1] != len(primary_names):
++    raise ValueError(
++      f"Contact sensor '{sensor_name}' current_air_time has "
++      f"{current_air_time.shape[1]} columns, but {len(primary_names)} primaries"
++    )
++
++  excess = torch.clamp(current_air_time - max_air_time, min=0.0, max=max_excess_time)
++  cost = torch.sum(torch.square(excess), dim=1)
++
++  log = env.extras.setdefault("log", {})
++  log["Metrics/anti_tripod/air_time_max"] = torch.amax(current_air_time)
++  log["Metrics/anti_tripod/air_time_excess_max"] = torch.amax(excess)
++  for foot_idx, foot_name in enumerate(primary_names):
++    safe_name = _contact_metric_name(foot_name, foot_idx)
++    log[f"Metrics/anti_tripod/air_time_mean/{safe_name}"] = torch.mean(
++      current_air_time[:, foot_idx]
++    )
++  return cost
++
++
++# 2026-09-02 anti-tripod update: require all feet to support a stationary stance.
++def feet_contact_count_standing(
++  env: ManagerBasedRlEnv,
++  sensor_name: str,
++  command_name: str,
++  required_contacts: int,
++  command_threshold: float = 0.05,
++) -> torch.Tensor:
++  """Penalize missing foot contacts while the commanded motion is stationary.
++
++  ``found`` is a per-contact-slot tensor.  Sensors with multiple slots per
++  primary are reduced using an any-slot rule before contacts are counted, so a
++  foot can contribute at most one contact regardless of ``num_slots``.
++  """
++  if isinstance(required_contacts, bool) or not isinstance(required_contacts, int):
++    raise TypeError(
++      f"required_contacts must be an integer, got {type(required_contacts).__name__}"
++    )
++  if required_contacts <= 0:
++    raise ValueError(f"required_contacts must be positive, got {required_contacts}")
++  if not math.isfinite(command_threshold) or command_threshold < 0.0:
++    raise ValueError(
++      f"command_threshold must be finite and non-negative, got {command_threshold}"
++    )
++
++  sensor: ContactSensor = env.scene[sensor_name]
++  in_contact, primary_names = _contact_per_primary(sensor, sensor_name)
++  if required_contacts > len(primary_names):
++    raise ValueError(
++      f"required_contacts ({required_contacts}) exceeds the {len(primary_names)} "
++      f"primaries on contact sensor '{sensor_name}'"
++    )
++
++  command = env.command_manager.get_command(command_name)
++  if command is None:
++    raise RuntimeError(f"Command '{command_name}' not found")
++  if (
++    command.ndim != 2 or command.shape[0] != in_contact.shape[0] or command.shape[1] < 3
++  ):
++    raise ValueError(
++      f"Command '{command_name}' must have shape [B, >=3] matching the contact "
++      f"batch, got {tuple(command.shape)} for B={in_contact.shape[0]}"
++    )
++
++  command_magnitude = torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2])
++  standing = command_magnitude <= command_threshold
++  contact_count = torch.sum(in_contact, dim=1)
++  missing = torch.clamp(required_contacts - contact_count, min=0).to(command.dtype)
++  cost = missing * standing.to(command.dtype)
++
++  log = env.extras.setdefault("log", {})
++  log["Metrics/anti_tripod/standing_fraction"] = torch.mean(standing.float())
++  log["Metrics/anti_tripod/standing_missing_contacts_max"] = torch.amax(cost)
++  standing_count = torch.clamp(torch.sum(standing), min=1)
++  for foot_idx, foot_name in enumerate(primary_names):
++    safe_name = _contact_metric_name(foot_name, foot_idx)
++    contact_rate = torch.sum(in_contact[:, foot_idx] & standing) / standing_count
++    log[f"Metrics/anti_tripod/standing_contact_rate/{safe_name}"] = contact_rate
++  return cost
++
++
++def _contact_per_primary(
++  sensor: ContactSensor, sensor_name: str
++) -> tuple[torch.Tensor, tuple[str, ...]]:
++  """Return [B, P] contact flags from a possibly multi-slot contact sensor."""
++  found = sensor.data.found
++  if found is None:
++    raise RuntimeError(
++      f"Contact sensor '{sensor_name}' must include the 'found' field for "
++      "feet_contact_count_standing"
++    )
++  if found.ndim != 2:
++    raise ValueError(
++      f"Contact sensor '{sensor_name}' found must have shape [B, P * S], "
++      f"got {tuple(found.shape)}"
++    )
++
++  primary_names = tuple(sensor.primary_names)
++  num_primary = len(primary_names)
++  if num_primary == 0:
++    raise ValueError(f"Contact sensor '{sensor_name}' has no primary contacts")
++  num_slots, remainder = divmod(found.shape[1], num_primary)
++  if num_slots == 0 or remainder:
++    raise ValueError(
++      f"Contact sensor '{sensor_name}' found has {found.shape[1]} columns, which "
++      f"cannot be grouped across {num_primary} primaries"
++    )
++  in_contact = (found.reshape(found.shape[0], num_primary, num_slots) > 0).any(dim=-1)
++  return in_contact, primary_names
++
++
++def _contact_metric_name(primary_name: str, primary_idx: int) -> str:
++  """Build a stable logger key without introducing nested path separators."""
++  safe_name = "".join(
++    char if char.isalnum() or char in "-_" else "_" for char in primary_name
++  )
++  return f"{primary_idx}_{safe_name or 'foot'}"
++
++
+ def feet_clearance(
+   env: ManagerBasedRlEnv,
+   target_height: float,
+@@ -322,6 +538,11 @@ class feet_swing_height:
+     )
+     return cost
+ 
++  # 2026-09-02 anti-tripod update: do not carry swing peaks across episodes.
++  def reset(self, env_ids: torch.Tensor) -> None:
++    """Clear peak-height history only for environments being reset."""
++    self.peak_heights[env_ids] = 0.0
++
+ 
+ def feet_slip(
+   env: ManagerBasedRlEnv,
+diff --git a/src/mjlab/tasks/velocity/mdp/terminations.py b/src/mjlab/tasks/velocity/mdp/terminations.py
+index 6c0b2a3..4efd0c0 100644
+--- a/src/mjlab/tasks/velocity/mdp/terminations.py
++++ b/src/mjlab/tasks/velocity/mdp/terminations.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++import math
+ from typing import TYPE_CHECKING
+ 
+ import torch
+@@ -14,6 +15,31 @@ if TYPE_CHECKING:
+ _DEFAULT_ASSET_CFG = SceneEntityCfg("robot")
+ 
+ 
++# 2026-09-02 anti-tripod update: end episodes that permanently park one foot
++# in the air, while leaving ample time for a deliberate stair swing.
++def prolonged_foot_air_time(
++  env: ManagerBasedRlEnv,
++  sensor_name: str,
++  max_air_time: float = 2.0,
++) -> torch.Tensor:
++  """Terminate when any foot has remained continuously airborne too long."""
++  if not math.isfinite(max_air_time) or max_air_time <= 0.0:
++    raise ValueError(f"max_air_time must be positive and finite, got {max_air_time}")
++  sensor: ContactSensor = env.scene[sensor_name]
++  current_air_time = sensor.data.current_air_time
++  if current_air_time is None:
++    raise RuntimeError(
++      f"Contact sensor '{sensor_name}' must set track_air_time=True for "
++      "prolonged_foot_air_time"
++    )
++  if current_air_time.ndim != 2:
++    raise ValueError(
++      f"Contact sensor '{sensor_name}' current_air_time must have shape [B, P], "
++      f"got {tuple(current_air_time.shape)}"
++    )
++  return torch.any(current_air_time > max_air_time, dim=1)
++
++
+ def illegal_contact(
+   env: ManagerBasedRlEnv,
+   sensor_name: str,
+diff --git a/src/mjlab/tasks/velocity/mdp/velocity_command.py b/src/mjlab/tasks/velocity/mdp/velocity_command.py
+index 8881a7d..78ee58e 100644
+--- a/src/mjlab/tasks/velocity/mdp/velocity_command.py
++++ b/src/mjlab/tasks/velocity/mdp/velocity_command.py
+@@ -22,6 +22,22 @@ if TYPE_CHECKING:
+   from mjlab.viewer.debug_visualizer import DebugVisualizer
+ 
+ 
++def _validate_directional_bucket_fractions(
++  rel_forward_envs: float, rel_backward_envs: float
++) -> None:
++  for name, value in (
++    ("rel_forward_envs", rel_forward_envs),
++    ("rel_backward_envs", rel_backward_envs),
++  ):
++    if not 0.0 <= value <= 1.0:
++      raise ValueError(f"{name} must be within [0, 1], got {value}.")
++  if rel_forward_envs + rel_backward_envs > 1.0:
++    raise ValueError(
++      "rel_forward_envs + rel_backward_envs must not exceed 1, got "
++      f"{rel_forward_envs + rel_backward_envs}."
++    )
++
++
+ class UniformVelocityCommand(CommandTerm):
+   cfg: UniformVelocityCommandCfg
+ 
+@@ -32,6 +48,9 @@ class UniformVelocityCommand(CommandTerm):
+       raise ValueError("heading_command=True but ranges.heading is set to None.")
+     if self.cfg.ranges.heading and not self.cfg.heading_command:
+       raise ValueError("ranges.heading is set but heading_command=False.")
++    _validate_directional_bucket_fractions(
++      self.cfg.rel_forward_envs, self.cfg.rel_backward_envs
++    )
+ 
+     self.robot: Entity = env.scene[cfg.entity_name]
+ 
+@@ -45,10 +64,24 @@ class UniformVelocityCommand(CommandTerm):
+     self.is_standing_env = torch.zeros_like(self.is_heading_env)
+     self.is_world_env = torch.zeros_like(self.is_heading_env)
+     self.is_forward_env = torch.zeros_like(self.is_heading_env)
++    self.is_backward_env = torch.zeros_like(self.is_heading_env)
+ 
+     self.metrics["error_vel_xy"] = torch.zeros(self.num_envs, device=self.device)
+     self.metrics["error_vel_yaw"] = torch.zeros(self.num_envs, device=self.device)
+ 
++    # 2026-09-02 stair-training update: keep per-episode, per-direction
++    # tracking statistics for performance-gated command curricula.  These are
++    # intentionally separate from ``metrics``: the curriculum consumes the
++    # per-environment values before CommandTerm.reset() aggregates them.
++    self._forward_tracking_sum = torch.zeros(self.num_envs, device=self.device)
++    self._forward_tracking_count = torch.zeros(
++      self.num_envs, dtype=torch.long, device=self.device
++    )
++    self._backward_tracking_sum = torch.zeros(self.num_envs, device=self.device)
++    self._backward_tracking_count = torch.zeros(
++      self.num_envs, dtype=torch.long, device=self.device
++    )
++
+     # Set by create_gui() when the viewer is active.
+     self._joystick_enabled: viser.GuiCheckboxHandle | None = None
+     self._joystick_sliders: list[viser.GuiSliderHandle] = []
+@@ -118,6 +151,7 @@ class UniformVelocityCommand(CommandTerm):
+     self.is_standing_env[env_idx] = False
+     self.is_world_env[env_idx] = False
+     self.is_forward_env[env_idx] = False
++    self.is_backward_env[env_idx] = False
+     self.vel_command_b[env_idx] = self._manual_command_b[env_idx]
+     self.vel_command_w[env_idx] = self._manual_command_b[env_idx]
+     self._disable_joystick_override()
+@@ -162,6 +196,59 @@ class UniformVelocityCommand(CommandTerm):
+       / max_command_step
+     )
+ 
++  # 2026-09-02 stair-training update: expose the completed episode's raw
++  # directional accumulators without resetting them.  Curriculum terms run
++  # before command reset, so callers can safely select the resetting envs.
++  def get_directional_tracking_stats(
++    self, env_ids: torch.Tensor
++  ) -> dict[str, torch.Tensor]:
++    return {
++      "forward_tracking_sum": self._forward_tracking_sum[env_ids],
++      "forward_tracking_count": self._forward_tracking_count[env_ids],
++      "backward_tracking_sum": self._backward_tracking_sum[env_ids],
++      "backward_tracking_count": self._backward_tracking_count[env_ids],
++    }
++
++  # 2026-09-02 stair-training update: a resumed curriculum may restore a
++  # later command stage after the environment's initial stage-0 reset.
++  def resample_after_curriculum_restore(self) -> None:
++    """Resample every command from the restored stage without changing robot state."""
++    env_ids = torch.arange(self.num_envs, device=self.device)
++    self._forward_tracking_sum.zero_()
++    self._forward_tracking_count.zero_()
++    self._backward_tracking_sum.zero_()
++    self._backward_tracking_count.zero_()
++    self._resample(env_ids)
++    self._update_command(env_ids)
++    self._apply_manual_commands()
++    self._invalidate_observation_cache()
++
++  def _accumulate_directional_tracking(self, dt: float | torch.Tensor) -> None:
++    """Accumulate bounded planar tracking scores for positive-duration steps."""
++    if isinstance(dt, torch.Tensor):
++      active = dt.to(device=self.device) > 0.0
++    else:
++      if dt <= 0.0:
++        return
++      active = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
++
++    planar_error_sq = torch.sum(
++      torch.square(
++        self.vel_command_b[:, :2] - self.robot.data.root_link_lin_vel_b[:, :2]
++      ),
++      dim=-1,
++    )
++    # Match the linear-velocity reward's 0.5 m/s kernel width while excluding
++    # vertical velocity, which is expected during stair traversal.
++    tracking_score = torch.exp(-planar_error_sq / 0.5**2)
++
++    forward = self.is_forward_env & active
++    backward = self.is_backward_env & active
++    self._forward_tracking_sum += tracking_score * forward
++    self._forward_tracking_count += forward
++    self._backward_tracking_sum += tracking_score * backward
++    self._backward_tracking_count += backward
++
+   def _resample_command(self, env_ids: torch.Tensor) -> None:
+     r = torch.empty(len(env_ids), device=self.device)
+     self.vel_command_b[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
+@@ -178,9 +265,28 @@ class UniformVelocityCommand(CommandTerm):
+     # Copy sampled velocities as world-frame reference for world envs.
+     self.vel_command_w[env_ids] = self.vel_command_b[env_ids]
+ 
+-    # Forward-only envs: positive lin_vel_x, zero lateral and angular.
+-    self.is_forward_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_forward_envs
+-    fwd_ids = env_ids[self.is_forward_env[env_ids]]
++    # Draw mutually exclusive straight-forward and straight-backward buckets.
++    # Standing commands are independent and take precedence, so exclude them
++    # from the directional masks and let _update_command() zero them as usual.
++    selector = r.uniform_(0.0, 1.0)
++    is_non_standing = ~self.is_standing_env[env_ids]
++    is_forward = (selector < self.cfg.rel_forward_envs) & is_non_standing
++    is_backward = (
++      (selector >= self.cfg.rel_forward_envs)
++      & (selector < self.cfg.rel_forward_envs + self.cfg.rel_backward_envs)
++      & is_non_standing
++    )
++    self.is_forward_env[env_ids] = is_forward
++    self.is_backward_env[env_ids] = is_backward
++
++    # Dedicated directional buckets are body-frame straight commands. Prevent
++    # later heading control or world-frame rotation from changing their yaw or
++    # lateral velocity.
++    directional_ids = env_ids[is_forward | is_backward]
++    self.is_heading_env[directional_ids] = False
++    self.is_world_env[directional_ids] = False
++
++    fwd_ids = env_ids[is_forward]
+     if len(fwd_ids) > 0:
+       self.vel_command_b[fwd_ids, 0] = (
+         self.vel_command_b[fwd_ids, 0].abs().clamp(min=0.3)
+@@ -188,8 +294,25 @@ class UniformVelocityCommand(CommandTerm):
+       self.vel_command_b[fwd_ids, 1] = 0.0
+       self.vel_command_b[fwd_ids, 2] = 0.0
+ 
++    bwd_ids = env_ids[is_backward]
++    if len(bwd_ids) > 0:
++      self.vel_command_b[bwd_ids, 0] = (
++        -self.vel_command_b[bwd_ids, 0].abs().clamp(min=0.3)
++      )
++      self.vel_command_b[bwd_ids, 1] = 0.0
++      self.vel_command_b[bwd_ids, 2] = 0.0
++
++    self.vel_command_w[directional_ids] = self.vel_command_b[directional_ids]
++
+   def reset(self, env_ids: torch.Tensor | slice | None) -> dict[str, float]:
+     extras = super().reset(env_ids)
++    # 2026-09-02 stair-training update: reset only the requested environments;
++    # asynchronous vector-environment episodes must retain their own statistics.
++    assert isinstance(env_ids, torch.Tensor)
++    self._forward_tracking_sum[env_ids] = 0.0
++    self._forward_tracking_count[env_ids] = 0
++    self._backward_tracking_sum[env_ids] = 0.0
++    self._backward_tracking_count[env_ids] = 0
+     self._apply_manual_commands()
+     if self.cfg.init_velocity_prob > 0.0:
+       assert isinstance(env_ids, torch.Tensor)
+@@ -293,6 +416,10 @@ class UniformVelocityCommand(CommandTerm):
+   def compute(
+     self, dt: float | torch.Tensor, env_ids: torch.Tensor | None = None
+   ) -> None:
++    # 2026-09-02 stair-training update: measure the command that governed the
++    # just-finished step before timer expiry can resample it.  A per-env zero dt
++    # on auto-reset prevents freshly reset environments from adding a fake sample.
++    self._accumulate_directional_tracking(dt)
+     super().compute(dt, env_ids)
+     self._apply_manual_commands()
+     if self._joystick_enabled is not None and self._joystick_enabled.value:
+@@ -385,9 +512,14 @@ class UniformVelocityCommandCfg(CommandTermCfg):
+   World-frame envs sample linear velocity in world frame and rotate to body
+   frame each step, so the command direction stays fixed in the world."""
+   rel_forward_envs: float = 0.0
+-  """Fraction of environments that receive forward-only commands (positive
+-  lin_vel_x, zero lin_vel_y and ang_vel_z). Increases training coverage for
+-  straight-line walking, which is important for stair climbing."""
++  """Fraction of non-standing environments that receive straight-forward
++  body-frame commands (positive lin_vel_x, zero lin_vel_y and ang_vel_z).
++  Forward and backward buckets are mutually exclusive."""
++  rel_backward_envs: float = 0.0
++  """Fraction of non-standing environments that receive straight-backward
++  body-frame commands (negative lin_vel_x, zero lin_vel_y and ang_vel_z).
++  The remaining ``1 - rel_forward_envs - rel_backward_envs`` environments use
++  general sampled commands."""
+   init_velocity_prob: float = 0.0
+   """Probability that an env starts its episode already moving at its sampled
+   planar command velocity. Applied on reset only."""
+@@ -412,6 +544,9 @@ class UniformVelocityCommandCfg(CommandTermCfg):
+     return UniformVelocityCommand(self, env)
+ 
+   def __post_init__(self):
++    _validate_directional_bucket_fractions(
++      self.rel_forward_envs, self.rel_backward_envs
++    )
+     if self.heading_command and self.ranges.heading is None:
+       raise ValueError(
+         "The velocity command has heading commands active (heading_command=True) but "
+diff --git a/src/mjlab/tasks/velocity/rl/runner.py b/src/mjlab/tasks/velocity/rl/runner.py
+index 2d682d1..22f43d2 100644
+--- a/src/mjlab/tasks/velocity/rl/runner.py
++++ b/src/mjlab/tasks/velocity/rl/runner.py
+@@ -20,6 +20,9 @@ class VelocityOnPolicyRunner(MjlabOnPolicyRunner):
+       is_wandb = isinstance(self.logger.writer, WandbLogWriter)
+       run_name: str = wandb.run.name if is_wandb and wandb.run else "local"  # type: ignore[assignment]
+       metadata = get_base_metadata(self.env.unwrapped, run_name)
++      metadata["raw_action_clip"] = (
++        self.env.clip_actions if self.env.clip_actions is not None else "None"
++      )
+       attach_metadata_to_onnx(str(onnx_path), metadata)
+       if is_wandb and self.cfg["upload_model"]:
+         wandb.save(str(onnx_path), base_path=str(policy_dir))
+diff --git a/tests/test_curriculum_manager.py b/tests/test_curriculum_manager.py
+index 4aa956a..c9c2c93 100644
+--- a/tests/test_curriculum_manager.py
++++ b/tests/test_curriculum_manager.py
+@@ -5,7 +5,29 @@ from unittest.mock import Mock
+ import pytest
+ import torch
+ 
+-from mjlab.managers.curriculum_manager import CurriculumManager, CurriculumTermCfg
++from mjlab.managers.curriculum_manager import (
++  CurriculumManager,
++  CurriculumTermCfg,
++  NullCurriculumManager,
++)
++
++
++# 2026-09-02 stair-training update: exercise class-term checkpoint state.
++class _StatefulCurriculumTerm:
++  def __init__(self, cfg: CurriculumTermCfg, env) -> None:
++    del cfg, env
++    self.progress = 0
++
++  def __call__(self, env, env_ids):
++    del env, env_ids
++    self.progress += 1
++    return torch.tensor(float(self.progress))
++
++  def state_dict(self) -> dict[str, int]:
++    return {"progress": self.progress}
++
++  def load_state_dict(self, state_dict: dict[str, int]) -> None:
++    self.progress = state_dict["progress"]
+ 
+ 
+ @pytest.fixture
+@@ -39,3 +61,43 @@ def test_get_active_iterable_terms_handles_dict_and_scalar_state(mock_env):
+   terms = dict(manager.get_active_iterable_terms(0))
+   assert terms["dict_term"] == [1.5, 2.0]
+   assert terms["scalar_term"] == [7.0]
++
++
++# 2026-09-02 stair-training update: verify named class-term state round-trips.
++def test_state_dict_round_trip_for_class_terms(mock_env):
++  def stateless_term(env, env_ids):
++    del env, env_ids
++    return torch.tensor(0.0)
++
++  manager = CurriculumManager(
++    {
++      "stateful": CurriculumTermCfg(func=_StatefulCurriculumTerm, params={}),
++      "stateless": CurriculumTermCfg(func=stateless_term, params={}),
++    },
++    mock_env,
++  )
++  stateful_term = manager.get_term_cfg("stateful").func
++  assert isinstance(stateful_term, _StatefulCurriculumTerm)
++
++  manager.compute()
++  manager.compute()
++  saved_state = manager.state_dict()
++  assert saved_state == {"stateful": {"progress": 2}}
++
++  stateful_term.progress = 99
++  manager.load_state_dict(
++    {"stateful": {"progress": 2}, "removed_term": {"progress": 123}}
++  )
++  assert stateful_term.progress == 2
++
++  # Missing state belongs to an older/different checkpoint and is a no-op.
++  stateful_term.progress = 7
++  manager.load_state_dict({"removed_term": {"progress": 123}})
++  assert stateful_term.progress == 7
++
++
++# 2026-09-02 stair-training update: inactive curricula expose the same no-op API.
++def test_null_curriculum_manager_checkpoint_api():
++  manager = NullCurriculumManager()
++  assert manager.state_dict() == {}
++  manager.load_state_dict({"unused": {"progress": 1}})
+diff --git a/tests/test_runner.py b/tests/test_runner.py
+index fb1816d..ca2d325 100644
+--- a/tests/test_runner.py
++++ b/tests/test_runner.py
+@@ -4,6 +4,7 @@ import ast
+ import tempfile
+ from dataclasses import asdict
+ from pathlib import Path
++from types import SimpleNamespace
+ from unittest.mock import MagicMock, patch
+ 
+ import mujoco
+@@ -29,6 +30,7 @@ from mjlab.sim import MujocoCfg, SimulationCfg
+ from mjlab.tasks.tracking.rl.runner import _OnnxMotionModel
+ from mjlab.terrains import TerrainEntityCfg
+ from mjlab.utils.os import dump_yaml
++from mjlab.utils.spaces import Box
+ 
+ 
+ @pytest.fixture(scope="module")
+@@ -100,6 +102,117 @@ def env(device):
+   env.close()
+ 
+ 
++def test_vecenv_wrapper_clips_raw_actions_before_environment_step(env, device):
++  wrapped_env = RslRlVecEnvWrapper(env, clip_actions=5.0)
++  raw_actions = torch.tensor([[9.0], [-2.0]], device=device)
++
++  _, _, _, extras = wrapped_env.step(raw_actions)
++
++  expected = torch.tensor([[5.0], [-2.0]], device=device)
++  torch.testing.assert_close(env.action_manager.action, expected)
++  action_term = env.action_manager.get_term("joint_pos")
++  torch.testing.assert_close(action_term.raw_action, expected)
++  assert extras["log"]["Metrics/raw_action_step_abs_max"].item() == pytest.approx(9.0)
++  assert extras["log"]["Metrics/raw_action_clip_fraction"].item() == pytest.approx(0.5)
++  assert isinstance(wrapped_env.action_space, Box)
++  assert wrapped_env.action_space.low == -5.0
++  assert wrapped_env.action_space.high == 5.0
++
++
++@pytest.mark.parametrize("nonfinite", [float("nan"), float("inf"), float("-inf")])
++def test_vecenv_wrapper_rejects_nonfinite_actions_before_environment_step(
++  env, device, nonfinite
++):
++  wrapped_env = RslRlVecEnvWrapper(env, clip_actions=5.0)
++  action_before = env.action_manager.action.clone()
++  raw_actions = torch.tensor([[nonfinite], [0.0]], device=device)
++
++  with pytest.raises(FloatingPointError, match="non-finite raw action"):
++    wrapped_env.step(raw_actions)
++
++  torch.testing.assert_close(env.action_manager.action, action_before)
++
++
++@pytest.mark.parametrize("clip_actions", [0.0, -1.0, float("nan"), float("inf")])
++def test_vecenv_wrapper_rejects_invalid_action_clip(clip_actions):
++  with pytest.raises(ValueError, match="positive finite"):
++    RslRlVecEnvWrapper(MagicMock(), clip_actions=clip_actions)
++
++
++# 2026-09-02 stair-training update: simultaneous failure and timeout remains
++# terminal for PPO, while a timeout without failure is still bootstrapped.
++def test_vecenv_wrapper_excludes_failures_from_timeout_bootstrap(
++  env, device, monkeypatch
++):
++  wrapped_env = RslRlVecEnvWrapper(env)
++  observations = env.get_observations()
++  rewards = torch.zeros(2, device=device)
++  terminated = torch.tensor([False, True], device=device)
++  truncated = torch.tensor([True, True], device=device)
++  monkeypatch.setattr(
++    env,
++    "step",
++    lambda _actions: (observations, rewards, terminated, truncated, {}),
++  )
++
++  _, _, dones, extras = wrapped_env.step(torch.zeros(2, 1, device=device))
++
++  assert dones.tolist() == [1, 1]
++  assert extras["time_outs"].tolist() == [True, False]
++
++
++@pytest.fixture
++def curriculum_terrain(env, device):
++  """Temporarily turn the plane fixture into an isolated curriculum terrain."""
++  terrain = env.scene.terrain
++  assert terrain is not None
++
++  had_levels = hasattr(terrain, "terrain_levels")
++  had_types = hasattr(terrain, "terrain_types")
++  old_levels = getattr(terrain, "terrain_levels", None)
++  old_types = getattr(terrain, "terrain_types", None)
++  old_terrain_origins = terrain.terrain_origins
++  old_env_origins = terrain.env_origins
++  old_generator_cfg = terrain.cfg.terrain_generator
++  old_common_step_counter = env.common_step_counter
++
++  terrain_origins = torch.tensor(
++    [
++      [[0.0, 0.0, 0.0], [0.0, 20.0, 1.0]],
++      [[10.0, 0.0, 2.0], [10.0, 20.0, 3.0]],
++      [[20.0, 0.0, 4.0], [20.0, 20.0, 5.0]],
++    ],
++    device=device,
++  )
++  terrain.cfg.terrain_generator = SimpleNamespace(
++    sub_terrains={"flat": object(), "stairs": object()}
++  )
++  terrain.terrain_origins = terrain_origins
++  terrain.terrain_levels = torch.tensor([0, 1], device=device, dtype=torch.long)
++  terrain.terrain_types = torch.tensor([0, 1], device=device, dtype=torch.long)
++  terrain.env_origins = terrain_origins[
++    terrain.terrain_levels, terrain.terrain_types
++  ].clone()
++
++  try:
++    yield terrain, terrain_origins
++  finally:
++    terrain.cfg.terrain_generator = old_generator_cfg
++    terrain.terrain_origins = old_terrain_origins
++    terrain.env_origins = old_env_origins
++    if had_levels:
++      terrain.terrain_levels = old_levels
++    else:
++      del terrain.terrain_levels
++    if had_types:
++      terrain.terrain_types = old_types
++    else:
++      del terrain.terrain_types
++    # Restore both the Python origins and live MuJoCo state for the module fixture.
++    env.common_step_counter = old_common_step_counter
++    env.reset()
++
++
+ def test_runner_persists_common_step_counter(env, device, monkeypatch):
+   """MjlabOnPolicyRunner should save and restore common_step_counter."""
+   wrapped_env = RslRlVecEnvWrapper(env)
+@@ -123,6 +236,35 @@ def test_runner_persists_common_step_counter(env, device, monkeypatch):
+     assert wrapped_env.unwrapped.common_step_counter == 12345
+ 
+ 
++# 2026-09-02 stair-training update: cover manager state through a full save/load.
++def test_runner_persists_curriculum_manager_state(env, device, monkeypatch):
++  wrapped_env = RslRlVecEnvWrapper(env)
++  curriculum_manager = wrapped_env.unwrapped.curriculum_manager
++  curriculum_state = {"command_velocity": {"stage": 2, "score": 0.75}}
++  state_dict = MagicMock(return_value=curriculum_state)
++  load_state_dict = MagicMock()
++  monkeypatch.setattr(curriculum_manager, "state_dict", state_dict)
++  monkeypatch.setattr(curriculum_manager, "load_state_dict", load_state_dict)
++
++  agent_cfg = RslRlOnPolicyRunnerCfg(
++    num_steps_per_env=4, max_iterations=10, save_interval=5
++  )
++  with tempfile.TemporaryDirectory() as tmpdir:
++    runner = MjlabOnPolicyRunner(
++      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
++    )
++    monkeypatch.setattr(runner.logger, "save_model", lambda *args, **kwargs: None)
++    checkpoint_path = str(Path(tmpdir) / "curriculum_checkpoint.pt")
++
++    runner.save(checkpoint_path)
++    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
++    assert checkpoint["infos"]["env_state"]["curriculum"] == curriculum_state
++    state_dict.assert_called_once_with()
++
++    runner.load(checkpoint_path)
++    load_state_dict.assert_called_once_with(curriculum_state)
++
++
+ def test_runner_handles_old_checkpoints_without_env_state(env, device):
+   """Old checkpoints without env_state should load without crashing."""
+ 
+@@ -152,6 +294,226 @@ def test_runner_handles_old_checkpoints_without_env_state(env, device):
+     assert wrapped_env.unwrapped.common_step_counter == 999
+ 
+ 
++# 2026-09-02 stair-training update: prior env_state payloads lack curriculum.
++def test_runner_handles_old_env_state_without_curriculum(env, device, monkeypatch):
++  wrapped_env = RslRlVecEnvWrapper(env)
++  curriculum_manager = wrapped_env.unwrapped.curriculum_manager
++  load_state_dict = MagicMock()
++  monkeypatch.setattr(curriculum_manager, "load_state_dict", load_state_dict)
++  agent_cfg = RslRlOnPolicyRunnerCfg(
++    num_steps_per_env=4, max_iterations=10, save_interval=5
++  )
++
++  with tempfile.TemporaryDirectory() as tmpdir:
++    runner = MjlabOnPolicyRunner(
++      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
++    )
++    checkpoint = runner.alg.save()
++    checkpoint.update(
++      {
++        "iter": 100,
++        "infos": {"env_state": {"common_step_counter": 2468}},
++      }
++    )
++    checkpoint_path = str(Path(tmpdir) / "old_env_state_checkpoint.pt")
++    torch.save(checkpoint, checkpoint_path)
++
++    wrapped_env.unwrapped.common_step_counter = 0
++    runner.load(checkpoint_path)
++
++    assert wrapped_env.unwrapped.common_step_counter == 2468
++    load_state_dict.assert_not_called()
++
++
++def test_runner_persists_terrain_state_and_aligns_entities(
++  env, device, monkeypatch, curriculum_terrain
++):
++  """Full resume restores terrain buckets without leaving robots at old origins."""
++  terrain, terrain_origins = curriculum_terrain
++  terrain.terrain_levels.copy_(torch.tensor([2, 1], device=device))
++  terrain.terrain_types.copy_(torch.tensor([1, 0], device=device))
++  terrain.env_origins.copy_(
++    terrain_origins[terrain.terrain_levels, terrain.terrain_types]
++  )
++  wrapped_env = RslRlVecEnvWrapper(env)
++  agent_cfg = RslRlOnPolicyRunnerCfg(
++    num_steps_per_env=4, max_iterations=10, save_interval=5
++  )
++
++  with tempfile.TemporaryDirectory() as tmpdir:
++    runner = MjlabOnPolicyRunner(
++      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
++    )
++    monkeypatch.setattr(runner.logger, "save_model", lambda *args, **kwargs: None)
++
++    wrapped_env.unwrapped.common_step_counter = 12345
++    checkpoint_path = str(Path(tmpdir) / "terrain_checkpoint.pt")
++    runner.save(checkpoint_path)
++
++    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
++    saved_terrain = checkpoint["infos"]["env_state"]["terrain"]
++    assert saved_terrain["levels"].device.type == "cpu"
++    assert saved_terrain["types"].device.type == "cpu"
++    assert saved_terrain["grid_shape"] == (3, 2)
++    assert saved_terrain["terrain_names"] == ("flat", "stairs")
++
++    terrain.terrain_levels.copy_(torch.tensor([0, 0], device=device))
++    terrain.terrain_types.copy_(torch.tensor([0, 1], device=device))
++    terrain.env_origins.copy_(
++      terrain_origins[terrain.terrain_levels, terrain.terrain_types]
++    )
++    wrapped_env.reset()
++    robot = wrapped_env.unwrapped.scene["robot"]
++    relative_pose_before = (
++      robot.data.root_link_pose_w[:, :3] - terrain.env_origins
++    ).clone()
++
++    wrapped_env.unwrapped.common_step_counter = 0
++    runner.load(checkpoint_path)
++
++    assert wrapped_env.unwrapped.common_step_counter == 12345
++    assert terrain.terrain_levels.tolist() == [2, 1]
++    assert terrain.terrain_types.tolist() == [1, 0]
++    torch.testing.assert_close(
++      terrain.env_origins,
++      terrain_origins[terrain.terrain_levels, terrain.terrain_types],
++    )
++    torch.testing.assert_close(
++      robot.data.root_link_pose_w[:, :3] - terrain.env_origins,
++      relative_pose_before,
++    )
++
++
++def test_runner_rejects_invalid_terrain_state_atomically(
++  env, device, curriculum_terrain
++):
++  """Invalid saved indices must not partially mutate terrain or entity placement."""
++  terrain, _ = curriculum_terrain
++  wrapped_env = RslRlVecEnvWrapper(env)
++  agent_cfg = RslRlOnPolicyRunnerCfg(
++    num_steps_per_env=4, max_iterations=10, save_interval=5
++  )
++
++  with tempfile.TemporaryDirectory() as tmpdir:
++    runner = MjlabOnPolicyRunner(
++      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
++    )
++    levels_before = terrain.terrain_levels.clone()
++    types_before = terrain.terrain_types.clone()
++    origins_before = terrain.env_origins.clone()
++    robot_pose_before = env.scene["robot"].data.root_link_pose_w.clone()
++
++    invalid_state = {
++      "levels": torch.tensor([1, 0]),
++      "types": torch.tensor([0, 2]),
++      "grid_shape": (3, 2),
++      "terrain_names": ("flat", "stairs"),
++    }
++    with pytest.warns(RuntimeWarning, match="outside the current terrain grid"):
++      runner._restore_terrain_state(invalid_state)
++
++    assert torch.equal(terrain.terrain_levels, levels_before)
++    assert torch.equal(terrain.terrain_types, types_before)
++    assert torch.equal(terrain.env_origins, origins_before)
++    assert torch.equal(env.scene["robot"].data.root_link_pose_w, robot_pose_before)
++
++
++@pytest.mark.parametrize("mismatch", ["grid_shape", "terrain_names", "num_envs"])
++def test_runner_rejects_mismatched_terrain_configuration_atomically(
++  env, device, curriculum_terrain, mismatch
++):
++  """A checkpoint from an incompatible terrain layout must be ignored as a unit."""
++  terrain, _ = curriculum_terrain
++  wrapped_env = RslRlVecEnvWrapper(env)
++  agent_cfg = RslRlOnPolicyRunnerCfg(
++    num_steps_per_env=4, max_iterations=10, save_interval=5
++  )
++
++  with tempfile.TemporaryDirectory() as tmpdir:
++    runner = MjlabOnPolicyRunner(
++      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
++    )
++    levels_before = terrain.terrain_levels.clone()
++    types_before = terrain.terrain_types.clone()
++    origins_before = terrain.env_origins.clone()
++
++    terrain_state = {
++      "levels": torch.tensor([1, 0]),
++      "types": torch.tensor([1, 0]),
++      "grid_shape": (3, 2),
++      "terrain_names": ("flat", "stairs"),
++    }
++    if mismatch == "grid_shape":
++      terrain_state["grid_shape"] = (2, 2)
++      warning = "terrain grid"
++    elif mismatch == "terrain_names":
++      terrain_state["terrain_names"] = ("stairs", "flat")
++      warning = "terrain types"
++    else:
++      terrain_state["levels"] = torch.tensor([1])
++      warning = "environment count"
++
++    with pytest.warns(RuntimeWarning, match=warning):
++      runner._restore_terrain_state(terrain_state)
++
++    assert torch.equal(terrain.terrain_levels, levels_before)
++    assert torch.equal(terrain.terrain_types, types_before)
++    assert torch.equal(terrain.env_origins, origins_before)
++
++
++def test_runner_handles_environment_without_terrain(env, device, monkeypatch):
++  """Saving is valid and saved curriculum state is ignored when terrain is absent."""
++  wrapped_env = RslRlVecEnvWrapper(env)
++  agent_cfg = RslRlOnPolicyRunnerCfg(
++    num_steps_per_env=4, max_iterations=10, save_interval=5
++  )
++
++  with tempfile.TemporaryDirectory() as tmpdir:
++    runner = MjlabOnPolicyRunner(
++      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
++    )
++    monkeypatch.setattr(runner.logger, "save_model", lambda *args, **kwargs: None)
++    monkeypatch.setattr(wrapped_env.unwrapped.scene, "_terrain", None)
++
++    checkpoint_path = str(Path(tmpdir) / "no_terrain_checkpoint.pt")
++    runner.save(checkpoint_path)
++    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
++
++    assert "terrain" not in checkpoint["infos"]["env_state"]
++    with pytest.warns(RuntimeWarning, match="has no curriculum terrain"):
++      runner._restore_terrain_state(
++        {
++          "levels": torch.tensor([0, 0]),
++          "types": torch.tensor([0, 0]),
++          "grid_shape": (1, 1),
++        }
++      )
++
++
++def test_runner_partial_load_does_not_restore_environment(env, device, monkeypatch):
++  """Actor-only loads used by play/hot-swap must not alter the live environment."""
++  wrapped_env = RslRlVecEnvWrapper(env)
++  agent_cfg = RslRlOnPolicyRunnerCfg(
++    num_steps_per_env=4, max_iterations=10, save_interval=5
++  )
++
++  with tempfile.TemporaryDirectory() as tmpdir:
++    runner = MjlabOnPolicyRunner(
++      wrapped_env, asdict(agent_cfg), log_dir=tmpdir, device=device
++    )
++    monkeypatch.setattr(runner.logger, "save_model", lambda *args, **kwargs: None)
++    wrapped_env.unwrapped.common_step_counter = 12345
++    checkpoint_path = str(Path(tmpdir) / "partial_checkpoint.pt")
++    runner.save(checkpoint_path)
++
++    wrapped_env.unwrapped.common_step_counter = 77
++    with patch.object(runner, "_restore_env_state") as restore_env_state:
++      runner.load(checkpoint_path, load_cfg={"actor": True})
++
++    restore_env_state.assert_not_called()
++    assert wrapped_env.unwrapped.common_step_counter == 77
++
++
+ @pytest.mark.filterwarnings("ignore::DeprecationWarning")
+ def test_export_policy_to_onnx(env, device):
+   """runner.export_policy_to_onnx() produces a valid ONNX file."""
+diff --git a/tests/test_velocity_command.py b/tests/test_velocity_command.py
+index 8607241..4768439 100644
+--- a/tests/test_velocity_command.py
++++ b/tests/test_velocity_command.py
+@@ -1,9 +1,4 @@
+-"""Tests for the velocity command's initial-velocity injection.
+-
+-The init_velocity_prob path runs inside the reset pipeline, after reset
+-events wrote the new pose to qpos but before sim.forward(), so it must not
+-read (or write back) derived kinematics.
+-"""
++"""Tests for velocity command sampling, overrides, and reset behavior."""
+ 
+ from types import SimpleNamespace
+ from typing import TYPE_CHECKING, Any, cast
+@@ -31,6 +26,11 @@ def _make_velocity_command(
+   resampling_time_range: tuple[float, float] = (100.0, 100.0),
+   ranges: UniformVelocityCommandCfg.Ranges | None = None,
+   heading_command: bool = False,
++  rel_standing_envs: float = 0.0,
++  rel_heading_envs: float = 0.0,
++  rel_world_envs: float = 0.0,
++  rel_forward_envs: float = 0.0,
++  rel_backward_envs: float = 0.0,
+ ):
+   scene, sim = make_scene_and_sim(
+     device,
+@@ -47,10 +47,11 @@ def _make_velocity_command(
+   cfg = UniformVelocityCommandCfg(
+     entity_name="robot",
+     resampling_time_range=resampling_time_range,
+-    rel_standing_envs=0.0,
+-    rel_heading_envs=0.0,
+-    rel_world_envs=0.0,
+-    rel_forward_envs=0.0,
++    rel_standing_envs=rel_standing_envs,
++    rel_heading_envs=rel_heading_envs,
++    rel_world_envs=rel_world_envs,
++    rel_forward_envs=rel_forward_envs,
++    rel_backward_envs=rel_backward_envs,
+     heading_command=heading_command,
+     ranges=ranges
+     or UniformVelocityCommandCfg.Ranges(
+@@ -163,6 +164,192 @@ def test_mid_episode_resample_does_not_write_velocity(device):
+   )
+ 
+ 
++@pytest.mark.parametrize(
++  ("rel_forward_envs", "rel_backward_envs", "expected_x"),
++  [(1.0, 0.0, 0.65), (0.0, 1.0, -0.65)],
++)
++def test_directional_bucket_stays_straight_in_body_frame(
++  device, rel_forward_envs, rel_backward_envs, expected_x
++):
++  term = _make_velocity_command(
++    device,
++    num_envs=8,
++    heading_command=True,
++    rel_heading_envs=1.0,
++    rel_world_envs=1.0,
++    rel_forward_envs=rel_forward_envs,
++    rel_backward_envs=rel_backward_envs,
++    ranges=UniformVelocityCommandCfg.Ranges(
++      lin_vel_x=(0.65, 0.65),
++      lin_vel_y=(0.2, 0.2),
++      ang_vel_z=(0.4, 0.4),
++      heading=(1.0, 1.0),
++    ),
++  )
++  term.compute(dt=0.0)
++
++  expected = torch.tensor((expected_x, 0.0, 0.0), device=device).expand(8, -1)
++  assert torch.allclose(term.command, expected)
++  assert torch.allclose(term.vel_command_w, expected)
++  assert term.is_forward_env.all().item() == bool(rel_forward_envs)
++  assert term.is_backward_env.all().item() == bool(rel_backward_envs)
++  assert not term.is_heading_env.any()
++  assert not term.is_world_env.any()
++
++
++def test_forward_and_backward_buckets_are_mutually_exclusive(device):
++  torch.manual_seed(0)
++  term = _make_velocity_command(
++    device,
++    num_envs=64,
++    rel_forward_envs=0.5,
++    rel_backward_envs=0.5,
++  )
++
++  assert (term.is_forward_env ^ term.is_backward_env).all()
++  assert term.is_forward_env.any()
++  assert term.is_backward_env.any()
++  assert (term.command[term.is_forward_env, 0] >= 0.3).all()
++  assert (term.command[term.is_backward_env, 0] <= -0.3).all()
++  assert torch.equal(term.command[:, 1:], torch.zeros_like(term.command[:, 1:]))
++
++
++def test_curriculum_restore_resamples_commands_from_restored_ranges(device):
++  term = _make_velocity_command(
++    device,
++    num_envs=4,
++    rel_forward_envs=1.0,
++    ranges=UniformVelocityCommandCfg.Ranges(
++      lin_vel_x=(0.4, 0.4),
++      lin_vel_y=(0.0, 0.0),
++      ang_vel_z=(0.0, 0.0),
++    ),
++  )
++  term._forward_tracking_count.fill_(5)
++  term.cfg.ranges.lin_vel_x = (0.9, 0.9)
++  term.cfg.rel_forward_envs = 0.0
++  term.cfg.rel_backward_envs = 1.0
++
++  term.resample_after_curriculum_restore()
++
++  assert torch.allclose(term.command[:, 0], torch.full_like(term.command[:, 0], -0.9))
++  assert term.is_backward_env.all()
++  assert not term.is_forward_env.any()
++  assert not term._forward_tracking_count.any()
++
++
++def test_standing_commands_override_directional_buckets(device):
++  term = _make_velocity_command(
++    device,
++    num_envs=8,
++    rel_standing_envs=1.0,
++    rel_backward_envs=1.0,
++  )
++  term.compute(dt=0.0)
++
++  assert term.is_standing_env.all()
++  assert not term.is_forward_env.any()
++  assert not term.is_backward_env.any()
++  assert torch.equal(term.command, torch.zeros_like(term.command))
++
++
++def test_directional_bucket_partial_resample_is_scoped(device):
++  term = _make_velocity_command(device, num_envs=3, rel_backward_envs=1.0)
++  untouched_command = term.command[[0, 2]].clone()
++  untouched_world_command = term.vel_command_w[[0, 2]].clone()
++
++  term.cfg.rel_backward_envs = 0.0
++  term.cfg.rel_forward_envs = 1.0
++  term.reset(torch.tensor([1], device=device))
++
++  assert term.is_backward_env.tolist() == [True, False, True]
++  assert term.is_forward_env.tolist() == [False, True, False]
++  assert torch.equal(term.command[[0, 2]], untouched_command)
++  assert torch.equal(term.vel_command_w[[0, 2]], untouched_world_command)
++  assert term.command[1, 0] >= 0.3
++  assert torch.equal(term.command[1, 1:], torch.zeros_like(term.command[1, 1:]))
++
++
++# 2026-09-02 stair-training update: the performance gate consumes these
++# statistics immediately before the command manager resets completed envs.
++def test_directional_tracking_stats_accumulate_and_partial_reset_is_scoped(device):
++  term = _make_velocity_command(device, num_envs=3)
++  term.vel_command_b[:] = torch.tensor(
++    [[0.5, 0.0, 0.0], [-0.5, 0.0, 0.0], [0.0, 0.0, 0.0]], device=device
++  )
++  term.is_forward_env[:] = torch.tensor([True, False, False], device=device)
++  term.is_backward_env[:] = torch.tensor([False, True, False], device=device)
++  term.robot.write_root_link_velocity_to_sim(
++    torch.zeros(3, 6, device=device), env_ids=torch.arange(3, device=device)
++  )
++  term._env.sim.forward()
++
++  term.compute(torch.tensor([0.02, 0.02, 0.0], device=device))
++  stats = term.get_directional_tracking_stats(torch.arange(3, device=device))
++  expected_score = torch.exp(torch.tensor(-1.0, device=device))
++  assert stats["forward_tracking_count"].tolist() == [1, 0, 0]
++  assert stats["backward_tracking_count"].tolist() == [0, 1, 0]
++  assert stats["forward_tracking_sum"][0].item() == pytest.approx(expected_score.item())
++  assert stats["backward_tracking_sum"][1].item() == pytest.approx(
++    expected_score.item()
++  )
++
++  # A zero per-env dt contributes no sample, and resetting env 1 must not
++  # erase env 0's still-running episode.
++  term.compute(torch.tensor([0.02, 0.0, 0.02], device=device))
++  term.reset(torch.tensor([1], device=device))
++  stats = term.get_directional_tracking_stats(torch.arange(3, device=device))
++  assert stats["forward_tracking_count"].tolist() == [2, 0, 0]
++  assert stats["backward_tracking_count"].tolist() == [0, 0, 0]
++  assert stats["forward_tracking_sum"][0].item() == pytest.approx(
++    2.0 * expected_score.item()
++  )
++
++
++def test_backward_bucket_is_disabled_by_default():
++  cfg = UniformVelocityCommandCfg(
++    entity_name="robot",
++    resampling_time_range=(1.0, 1.0),
++    rel_forward_envs=1.0,
++    ranges=UniformVelocityCommandCfg.Ranges(
++      lin_vel_x=(-1.0, 1.0),
++      lin_vel_y=(-0.5, 0.5),
++      ang_vel_z=(-0.5, 0.5),
++    ),
++  )
++
++  assert cfg.rel_backward_envs == 0.0
++
++
++@pytest.mark.parametrize(
++  ("rel_forward_envs", "rel_backward_envs"),
++  [
++    (-0.1, 0.0),
++    (1.1, 0.0),
++    (0.0, -0.1),
++    (0.0, 1.1),
++    (float("nan"), 0.0),
++    (0.0, float("nan")),
++    (0.6, 0.5),
++  ],
++)
++def test_directional_bucket_fractions_are_validated(
++  rel_forward_envs, rel_backward_envs
++):
++  with pytest.raises(ValueError):
++    UniformVelocityCommandCfg(
++      entity_name="robot",
++      resampling_time_range=(1.0, 1.0),
++      rel_forward_envs=rel_forward_envs,
++      rel_backward_envs=rel_backward_envs,
++      ranges=UniformVelocityCommandCfg.Ranges(
++        lin_vel_x=(-1.0, 1.0),
++        lin_vel_y=(-0.5, 0.5),
++        ang_vel_z=(-0.5, 0.5),
++      ),
++    )
++
++
+ def test_manual_command_applies_immediately_and_clamps(device):
+   term = _make_velocity_command(device, num_envs=1)
+   result = term.set_manual_command(0, (2.0, -1.0, 0.9))
+@@ -237,6 +424,7 @@ def test_manual_command_overrides_standing_heading_and_world_updates(device):
+   term.is_standing_env[0] = True
+   term.is_heading_env[0] = True
+   term.is_world_env[0] = True
++  term.is_backward_env[0] = True
+   term.heading_target[0] = 0.9
+   term.vel_command_w[0] = torch.tensor((0.6, 0.2, 0.0), device=device)
+ 
+@@ -244,6 +432,7 @@ def test_manual_command_overrides_standing_heading_and_world_updates(device):
+   term.set_manual_command(0, command)
+ 
+   assert term.command[0].tolist() == pytest.approx(command)
++  assert not term.is_backward_env[0]
+ 
+   # Even if another command subtype marks the env again later, the persistent
+   # manual override must still be applied last on every compute.
+diff --git a/tests/test_velocity_rewards.py b/tests/test_velocity_rewards.py
+index 579bc08..0336dba 100644
+--- a/tests/test_velocity_rewards.py
++++ b/tests/test_velocity_rewards.py
+@@ -3,14 +3,25 @@
+ from __future__ import annotations
+ 
+ import math
++from types import SimpleNamespace
+ from unittest.mock import MagicMock, PropertyMock
+ 
++import pytest
+ import torch
+ 
+ from mjlab.managers.reward_manager import RewardTermCfg
+ from mjlab.managers.scene_entity_config import SceneEntityCfg
+-from mjlab.sensor import RayCastData, RayCastSensor
+-from mjlab.tasks.velocity.mdp.rewards import upright
++from mjlab.sensor import RayCastData, RayCastSensor, TerrainHeightSensor
++from mjlab.tasks.velocity.mdp.rewards import (
++  base_height_l2,
++  feet_contact_count_standing,
++  feet_excessive_air_time,
++  feet_swing_height,
++  track_angular_velocity_yaw,
++  track_linear_velocity_xy,
++  upright,
++  vertical_velocity_l2,
++)
+ from mjlab.utils.lab_api.math import quat_from_euler_xyz
+ 
+ 
+@@ -188,3 +199,283 @@ def test_batch_consistency():
+   assert r[1].item() > 0.99
+   assert r[2].item() < 0.7
+   assert r[3].item() > 0.99
++
++
++# 2026-09-02 stair-training update: verify each decoupled reward uses only its axis.
++def _make_velocity_env(
++  linear_velocity: torch.Tensor,
++  angular_velocity: torch.Tensor,
++  command: torch.Tensor,
++):
++  asset = MagicMock()
++  asset.data.root_link_lin_vel_b = linear_velocity
++  asset.data.root_link_ang_vel_b = angular_velocity
++
++  env = MagicMock()
++  env.scene.__getitem__ = MagicMock(side_effect=lambda name: {"robot": asset}[name])
++  env.command_manager.get_command.return_value = command
++  return env
++
++
++def test_track_linear_velocity_xy_ignores_vertical_velocity():
++  command = torch.tensor([[1.0, -0.5, 0.7], [0.0, 0.0, -0.2]])
++  linear_velocity = torch.tensor([[1.0, -0.5, 9.0], [0.3, 0.4, -8.0]])
++  env = _make_velocity_env(linear_velocity, torch.zeros(2, 3), command)
++
++  reward = track_linear_velocity_xy(env, std=0.5, command_name="twist")
++
++  torch.testing.assert_close(reward, torch.tensor([1.0, math.exp(-1.0)]))
++
++
++def test_track_angular_velocity_yaw_ignores_roll_and_pitch_rates():
++  command = torch.tensor([[0.0, 0.0, 0.5], [0.0, 0.0, -0.5]])
++  angular_velocity = torch.tensor([[10.0, -10.0, 0.5], [-8.0, 7.0, 0.0]])
++  env = _make_velocity_env(torch.zeros(2, 3), angular_velocity, command)
++
++  reward = track_angular_velocity_yaw(env, std=0.5, command_name="twist")
++
++  torch.testing.assert_close(reward, torch.tensor([1.0, math.exp(-1.0)]))
++
++
++def test_vertical_velocity_l2_uses_only_body_z_velocity():
++  linear_velocity = torch.tensor([[12.0, -6.0, 3.0], [-9.0, 4.0, -2.0]])
++  env = _make_velocity_env(linear_velocity, torch.zeros(2, 3), torch.zeros(2, 3))
++
++  torch.testing.assert_close(vertical_velocity_l2(env), torch.tensor([9.0, 4.0]))
++
++
++def test_base_height_l2_uses_mean_terrain_clearance():
++  height_sensor = MagicMock(spec=TerrainHeightSensor)
++  height_sensor.data.heights = torch.tensor([[0.3, 0.5], [0.45, 0.55]])
++  env = MagicMock()
++  env.scene.__getitem__ = MagicMock(
++    side_effect=lambda name: {"base_height_scan": height_sensor}[name]
++  )
++
++  cost = base_height_l2(env, target_height=0.4, height_sensor_name="base_height_scan")
++
++  torch.testing.assert_close(cost, torch.tensor([0.0, 0.01]))
++
++
++# 2026-09-02 anti-tripod update: pin continuous, capped per-foot air-time cost.
++def _make_contact_reward_env(
++  *,
++  primary_names: tuple[str, ...],
++  current_air_time: torch.Tensor | None = None,
++  found: torch.Tensor | None = None,
++  command: torch.Tensor | None = None,
++):
++  sensor = SimpleNamespace(
++    primary_names=list(primary_names),
++    data=SimpleNamespace(current_air_time=current_air_time, found=found),
++  )
++  command_manager = MagicMock()
++  command_manager.get_command.return_value = command
++  return SimpleNamespace(
++    scene={"feet_contact": sensor},
++    command_manager=command_manager,
++    extras={"log": {}},
++  )
++
++
++def test_feet_excessive_air_time_is_continuous_and_capped_per_foot():
++  env = _make_contact_reward_env(
++    primary_names=("FL/foot", "FR_foot", "RL-foot", "RR foot"),
++    current_air_time=torch.tensor([[0.0, 0.5, 0.75, 2.0], [0.51, 0.4, 1.0, 20.0]]),
++  )
++
++  cost = feet_excessive_air_time(
++    env, sensor_name="feet_contact", max_air_time=0.5, max_excess_time=0.5
++  )
++
++  torch.testing.assert_close(cost, torch.tensor([0.3125, 0.5001]))
++  log = env.extras["log"]
++  torch.testing.assert_close(
++    log["Metrics/anti_tripod/air_time_max"], torch.tensor(20.0)
++  )
++  torch.testing.assert_close(
++    log["Metrics/anti_tripod/air_time_excess_max"], torch.tensor(0.5)
++  )
++  torch.testing.assert_close(
++    log["Metrics/anti_tripod/air_time_mean/0_FL_foot"], torch.tensor(0.255)
++  )
++  assert "Metrics/anti_tripod/air_time_mean/3_RR_foot" in log
++
++
++@pytest.mark.parametrize(
++  ("max_air_time", "max_excess_time", "match"),
++  [
++    (-0.1, 0.5, "max_air_time"),
++    (math.inf, 0.5, "max_air_time"),
++    (0.5, 0.0, "max_excess_time"),
++    (0.5, math.nan, "max_excess_time"),
++  ],
++)
++def test_feet_excessive_air_time_validates_parameters(
++  max_air_time: float, max_excess_time: float, match: str
++):
++  env = _make_contact_reward_env(
++    primary_names=("foot",), current_air_time=torch.zeros(1, 1)
++  )
++
++  with pytest.raises(ValueError, match=match):
++    feet_excessive_air_time(
++      env,
++      sensor_name="feet_contact",
++      max_air_time=max_air_time,
++      max_excess_time=max_excess_time,
++    )
++
++
++def test_feet_excessive_air_time_requires_per_primary_tracking_shape():
++  missing = _make_contact_reward_env(primary_names=("FL", "FR"))
++  with pytest.raises(RuntimeError, match="track_air_time=True"):
++    feet_excessive_air_time(
++      missing, "feet_contact", max_air_time=0.5, max_excess_time=0.5
++    )
++
++  wrong_shape = _make_contact_reward_env(
++    primary_names=("FL", "FR"), current_air_time=torch.zeros(2, 3)
++  )
++  with pytest.raises(ValueError, match="3 columns, but 2 primaries"):
++    feet_excessive_air_time(
++      wrong_shape, "feet_contact", max_air_time=0.5, max_excess_time=0.5
++    )
++
++
++# 2026-09-02 anti-tripod update: verify stationary contact counting and slot reduction.
++def test_feet_contact_count_standing_only_penalizes_stationary_commands():
++  env = _make_contact_reward_env(
++    primary_names=("FL", "FR", "RL", "RR"),
++    found=torch.tensor(
++      [
++        [1, 1, 1, 0],
++        [1, 0, 0, 0],
++        [1, 1, 0, 0],
++      ]
++    ),
++    command=torch.tensor(
++      [
++        [0.0, 0.0, 0.0],
++        [0.051, 0.0, 0.0],
++        [0.03, 0.0, 0.02],
++      ]
++    ),
++  )
++
++  cost = feet_contact_count_standing(
++    env,
++    sensor_name="feet_contact",
++    command_name="twist",
++    required_contacts=4,
++    command_threshold=0.05,
++  )
++
++  torch.testing.assert_close(cost, torch.tensor([1.0, 0.0, 2.0]))
++  log = env.extras["log"]
++  torch.testing.assert_close(
++    log["Metrics/anti_tripod/standing_missing_contacts_max"], torch.tensor(2.0)
++  )
++  torch.testing.assert_close(
++    log["Metrics/anti_tripod/standing_contact_rate/0_FL"], torch.tensor(1.0)
++  )
++  torch.testing.assert_close(
++    log["Metrics/anti_tripod/standing_contact_rate/3_RR"], torch.tensor(0.0)
++  )
++
++
++def test_feet_contact_count_standing_reduces_multiple_slots_per_foot():
++  # Primary-major layout: [FL slot 0, FL slot 1, FR slot 0, FR slot 1].
++  env = _make_contact_reward_env(
++    primary_names=("FL", "FR"),
++    found=torch.tensor([[0, 2, 0, 0], [0, 0, 1, 3]]),
++    command=torch.zeros(2, 3),
++  )
++
++  cost = feet_contact_count_standing(
++    env,
++    sensor_name="feet_contact",
++    command_name="twist",
++    required_contacts=2,
++  )
++
++  torch.testing.assert_close(cost, torch.tensor([1.0, 1.0]))
++
++
++@pytest.mark.parametrize("required_contacts", [0, -1, 3])
++def test_feet_contact_count_standing_validates_required_contacts(
++  required_contacts: int,
++):
++  env = _make_contact_reward_env(
++    primary_names=("FL", "FR"),
++    found=torch.ones(1, 2),
++    command=torch.zeros(1, 3),
++  )
++
++  with pytest.raises(ValueError, match="required_contacts"):
++    feet_contact_count_standing(
++      env,
++      sensor_name="feet_contact",
++      command_name="twist",
++      required_contacts=required_contacts,
++    )
++
++
++def test_feet_contact_count_standing_validates_sensor_and_command_shapes():
++  malformed_sensor = _make_contact_reward_env(
++    primary_names=("FL", "FR"),
++    found=torch.ones(2, 3),
++    command=torch.zeros(2, 3),
++  )
++  with pytest.raises(ValueError, match="cannot be grouped"):
++    feet_contact_count_standing(
++      malformed_sensor, "feet_contact", "twist", required_contacts=2
++    )
++
++  malformed_command = _make_contact_reward_env(
++    primary_names=("FL", "FR"),
++    found=torch.ones(2, 2),
++    command=torch.zeros(1, 3),
++  )
++  with pytest.raises(ValueError, match="matching the contact batch"):
++    feet_contact_count_standing(
++      malformed_command, "feet_contact", "twist", required_contacts=2
++    )
++
++
++# 2026-09-02 anti-tripod update: swing peaks must not leak across episode resets.
++def test_feet_swing_height_partial_reset_only_clears_selected_envs():
++  height_sensor = MagicMock(spec=TerrainHeightSensor)
++  height_sensor.num_frames = 4
++  env = MagicMock()
++  env.scene.__getitem__ = MagicMock(
++    side_effect=lambda name: {"foot_height_scan": height_sensor}[name]
++  )
++  env.num_envs = 4
++  env.device = "cpu"
++  env.step_dt = 0.02
++  cfg = MagicMock(spec=RewardTermCfg)
++  cfg.params = {"height_sensor_name": "foot_height_scan"}
++  reward = feet_swing_height(cfg, env)
++  reward.peak_heights[:] = torch.tensor(
++    [
++      [0.1, 0.2, 0.3, 0.4],
++      [0.5, 0.6, 0.7, 0.8],
++      [0.9, 1.0, 1.1, 1.2],
++      [1.3, 1.4, 1.5, 1.6],
++    ]
++  )
++
++  reward.reset(torch.tensor([1, 3]))
++
++  torch.testing.assert_close(
++    reward.peak_heights,
++    torch.tensor(
++      [
++        [0.1, 0.2, 0.3, 0.4],
++        [0.0, 0.0, 0.0, 0.0],
++        [0.9, 1.0, 1.1, 1.2],
++        [0.0, 0.0, 0.0, 0.0],
++      ]
++    ),
++  )
+diff --git a/tests/test_velocity_task.py b/tests/test_velocity_task.py
+index 0f7ee80..555f1ad 100644
+--- a/tests/test_velocity_task.py
++++ b/tests/test_velocity_task.py
+@@ -5,6 +5,8 @@ import pytest
+ from mjlab.asset_zoo.robots import G1_ACTION_SCALE, G23_ACTION_SCALE, GO1_ACTION_SCALE
+ from mjlab.envs.mdp.actions import JointPositionActionCfg
+ from mjlab.tasks.registry import list_tasks, load_env_cfg
++from mjlab.tasks.velocity import mdp
++from mjlab.tasks.velocity.config.g23.rl_cfg import syncai_g23_ppo_runner_cfg
+ from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
+ 
+ 
+@@ -102,14 +104,17 @@ def test_g23_velocity_has_required_sensors(g23_velocity_task_ids: list[str]) ->
+     assert cfg.scene.sensors is not None, f"Task {task_id} has no sensors"
+ 
+     sensor_names = {s.name for s in cfg.scene.sensors}
+-    for name in (
+-      "feet_ground_contact",
+-      "self_collision",
+-      "thigh_ground_touch",
+-      "shank_ground_touch",
+-      "torso_ground_touch",
+-    ):
+-      assert name in sensor_names, f"Task {task_id} missing {name} sensor"
++    assert "feet_ground_contact" in sensor_names, (
++      f"Task {task_id} missing feet_ground_contact sensor"
++    )
++    if "Rough" in task_id:
++      for name in (
++        "self_collision",
++        "thigh_ground_touch",
++        "shank_ground_touch",
++        "torso_ground_touch",
++      ):
++        assert name in sensor_names, f"Task {task_id} missing {name} sensor"
+ 
+ 
+ def test_flat_velocity_tasks_have_plane_terrain(
+@@ -152,6 +157,7 @@ def test_rough_velocity_training_has_curriculum_enabled() -> None:
+     "Mjlab-Velocity-Rough-Unitree-Go1",
+     "Mjlab-Velocity-Rough-SyncAI-G23",
+     "Mjlab-Velocity-Rough-SyncAI-G23-Proprio",
++    "Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6",
+   ]
+ 
+   for task_id in rough_training_tasks:
+@@ -174,6 +180,7 @@ def test_rough_velocity_play_has_curriculum_disabled() -> None:
+     "Mjlab-Velocity-Rough-Unitree-Go1",
+     "Mjlab-Velocity-Rough-SyncAI-G23",
+     "Mjlab-Velocity-Rough-SyncAI-G23-Proprio",
++    "Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6",
+   ]
+ 
+   for task_id in rough_training_tasks:
+@@ -246,27 +253,74 @@ def test_g23_velocity_has_correct_action_scale(
+     )
+ 
+ 
+-def test_g23_proprio_actor_observation_order_matches_rl_train() -> None:
+-  """The proprioceptive G23 task should match RL-train policy observation order."""
++def test_g23_proprio_actor_observation_order() -> None:
++  """Every proprioceptive G23 task should use the compact 45-D frame layout."""
+   original_cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23")
+-  proprio_cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio")
+ 
+   original_actor_terms = list(original_cfg.observations["actor"].terms)
+   assert "base_lin_vel" in original_actor_terms
+   assert "height_scan" in original_actor_terms
+ 
+-  assert list(proprio_cfg.observations["actor"].terms) == [
+-    "base_ang_vel",
+-    "projected_gravity",
+-    "command",
+-    "joint_pos",
+-    "joint_vel",
+-    "actions",
+-  ]
+-
+-
+-def test_g23_stair_training_third_parameters() -> None:
+-  """G23 stair-focused training should keep commands and terrain scoped."""
++  for task_id in (
++    "Mjlab-Velocity-Rough-SyncAI-G23-Proprio",
++    "Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6",
++    "Mjlab-Velocity-Flat-SyncAI-G23-Proprio",
++  ):
++    proprio_cfg = load_env_cfg(task_id)
++    assert list(proprio_cfg.observations["actor"].terms) == [
++      "base_ang_vel",
++      "projected_gravity",
++      "command",
++      "joint_pos",
++      "joint_vel",
++      "actions",
++    ]
++
++
++def test_g23_history6_is_opt_in_and_actor_only() -> None:
++  history_cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6")
++  actor = history_cfg.observations["actor"]
++  critic = history_cfg.observations["critic"]
++  assert actor.history_length == 6
++  assert actor.flatten_history_dim is True
++  assert critic.history_length is None
++
++  legacy_cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio")
++  assert legacy_cfg.observations["actor"].history_length is None
++
++
++def test_g23_flat_proprio_removes_rough_terrain_dependencies() -> None:
++  """The flat G23 task should not retain rough-terrain-only configuration."""
++  task_id = "Mjlab-Velocity-Flat-SyncAI-G23-Proprio"
++  assert task_id in list_tasks()
++
++  cfg = load_env_cfg(task_id)
++  assert cfg.scene.terrain is not None
++  assert cfg.scene.terrain.terrain_type == "plane"
++  assert cfg.scene.terrain.terrain_generator is None
++
++  sensor_names = {sensor.name for sensor in (cfg.scene.sensors or ())}
++  assert sensor_names.isdisjoint(
++    {
++      "terrain_scan",
++      "self_collision",
++      "thigh_ground_touch",
++      "shank_ground_touch",
++      "torso_ground_touch",
++    }
++  )
++  assert "height_scan" not in cfg.observations["critic"].terms
++  assert "terrain_sensor_names" not in cfg.rewards["upright"].params
++  assert "terrain_levels" not in cfg.curriculum
++  assert "command_performance" not in cfg.curriculum
++  assert "out_of_terrain_bounds" not in cfg.terminations
++  assert "fell_over" in cfg.terminations
++  assert "excessive_foot_air_time" in cfg.rewards
++  assert "standing_missing_foot_contacts" in cfg.rewards
++
++
++def test_g23_stair_training_update() -> None:
++  """G23 stair training should be performance-gated and conservatively tuned."""
+   cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio")
+ 
+   generator = cfg.scene.terrain.terrain_generator
+@@ -297,19 +351,98 @@ def test_g23_stair_training_third_parameters() -> None:
+ 
+   twist_cmd = cfg.commands["twist"]
+   assert isinstance(twist_cmd, UniformVelocityCommandCfg)
+-  assert twist_cmd.ranges.lin_vel_x == (-1.5, 1.5)
+-
+-  stages = cfg.curriculum["command_vel"].params["velocity_stages"]
++  assert twist_cmd.rel_forward_envs == pytest.approx(0.4)
++  assert twist_cmd.rel_backward_envs == pytest.approx(0.1)
++  assert twist_cmd.ranges.lin_vel_x == (-1.0, 1.0)
++
++  assert list(cfg.curriculum) == ["command_performance", "terrain_levels"]
++  command_curriculum = cfg.curriculum["command_performance"]
++  assert command_curriculum.func is mdp.PerformanceGatedVelocityCurriculum
++  stages = command_curriculum.params["stages"]
+   assert stages[-1]["lin_vel_x"] == (-1.5, 1.5)
++  required_stage_fields = {
++    "min_terrain_level",
++    "lin_vel_x",
++    "lin_vel_y",
++    "ang_vel_z",
++    "rel_forward_envs",
++    "rel_backward_envs",
++  }
+   for stage in stages:
++    assert set(stage) == required_stage_fields
++    assert "step" not in stage
+     lin_vel_x = stage["lin_vel_x"]
+     assert lin_vel_x[0] >= -1.5
+     assert lin_vel_x[1] <= 1.5
++  assert [stage["min_terrain_level"] for stage in stages] == [0, 3, 5, 7, 9]
++  assert [stage["rel_backward_envs"] for stage in stages] == [
++    0.1,
++    0.2,
++    0.2,
++    0.3,
++    0.3,
++  ]
++  assert command_curriculum.params["required_passes"] == 2
++  assert command_curriculum.params["min_stage_steps"] == 500 * 24
++  assert command_curriculum.params["contact_sensor_name"] == "feet_ground_contact"
++  assert command_curriculum.params["max_foot_air_time"] == pytest.approx(0.8)
++
++  runner_cfg = syncai_g23_ppo_runner_cfg()
++  assert runner_cfg.clip_actions == pytest.approx(5.0)
+ 
+   shank_reward = cfg.rewards["shank_collision"]
+   assert shank_reward.weight == -0.25
+   assert shank_reward.params["force_threshold"] == 10.0
+ 
++  assert cfg.rewards["track_linear_velocity"].func is mdp.track_linear_velocity_xy
++  assert cfg.rewards["track_angular_velocity"].func is mdp.track_angular_velocity_yaw
++  assert cfg.rewards["body_ang_vel"].weight == pytest.approx(-0.02)
++  assert cfg.rewards["foot_clearance"].weight == pytest.approx(-0.75)
++  assert cfg.rewards["foot_swing_height"].weight == pytest.approx(-0.25)
++  excessive_air = cfg.rewards["excessive_foot_air_time"]
++  assert excessive_air.func is mdp.feet_excessive_air_time
++  assert excessive_air.weight == pytest.approx(-4.0)
++  assert excessive_air.params == {
++    "sensor_name": "feet_ground_contact",
++    "max_air_time": 0.55,
++    "max_excess_time": 0.5,
++  }
++  standing_contacts = cfg.rewards["standing_missing_foot_contacts"]
++  assert standing_contacts.func is mdp.feet_contact_count_standing
++  assert standing_contacts.weight == pytest.approx(-0.5)
++  assert standing_contacts.params == {
++    "sensor_name": "feet_ground_contact",
++    "command_name": "twist",
++    "required_contacts": 4,
++    "command_threshold": 0.05,
++  }
++  assert cfg.rewards["air_time"].weight == 0.0
++  assert cfg.rewards["action_rate_l2"].weight == pytest.approx(-0.05)
++  assert cfg.rewards["action_acc_l2"].weight == pytest.approx(-0.01)
++
++  sensors = {sensor.name: sensor for sensor in (cfg.scene.sensors or ())}
++  assert "base_height_scan" in sensors
++  for name in ("thigh_ground_touch", "shank_ground_touch", "torso_ground_touch"):
++    assert sensors[name].reduce == "maxforce"
++
++  thigh_termination = cfg.terminations["illegal_contact"]
++  assert thigh_termination.params["force_threshold"] == 60.0
++  assert thigh_termination.params["history_count_threshold"] == 2
+   shank_termination = cfg.terminations["shank_illegal_contact"]
+-  assert shank_termination.params["force_threshold"] == 120.0
+-  assert shank_termination.params["history_count_threshold"] == 3
++  assert shank_termination.params["force_threshold"] == 180.0
++  assert shank_termination.params["history_count_threshold"] == 4
++  torso_termination = cfg.terminations["torso_illegal_contact"]
++  assert torso_termination.params["force_threshold"] == 80.0
++  assert torso_termination.params["history_count_threshold"] == 3
++  foot_air_termination = cfg.terminations["prolonged_foot_air_time"]
++  assert foot_air_termination.func is mdp.prolonged_foot_air_time
++  assert foot_air_termination.params == {
++    "sensor_name": "feet_ground_contact",
++    "max_air_time": 2.0,
++  }
++
++  push = cfg.events["push_robot"]
++  assert push.mode == "step"
++  assert push.func is mdp.apply_body_impulse
++  assert push.params["duration_s"] == (0.10, 0.15)
++  assert push.params["cooldown_s"] == (8.0, 12.0)
+diff --git a/tests/test_velocity_terminations.py b/tests/test_velocity_terminations.py
+index 66f9ba6..52bf871 100644
+--- a/tests/test_velocity_terminations.py
++++ b/tests/test_velocity_terminations.py
+@@ -4,7 +4,31 @@ from types import SimpleNamespace
+ 
+ import torch
+ 
+-from mjlab.tasks.velocity.mdp.terminations import illegal_contact
++from mjlab.tasks.velocity.mdp.terminations import (
++  illegal_contact,
++  prolonged_foot_air_time,
++)
++
++
++# 2026-09-02 anti-tripod update: a normal swing remains valid, but parking one
++# foot in the air past the backstop ends only the affected environment.
++def test_prolonged_foot_air_time_is_per_environment() -> None:
++  current_air_time = torch.tensor(
++    [
++      [0.0, 0.4, 0.8, 1.2],
++      [0.0, 2.0, 0.0, 0.0],
++      [0.1, 2.01, 0.2, 0.3],
++    ]
++  )
++  env = SimpleNamespace(
++    scene={
++      "feet": SimpleNamespace(data=SimpleNamespace(current_air_time=current_air_time))
++    }
++  )
++
++  terminated = prolonged_foot_air_time(env, sensor_name="feet", max_air_time=2.0)
++
++  assert terminated.tolist() == [False, False, True]
+ 
+ 
+ def test_illegal_contact_can_require_multiple_history_hits() -> None:
+@@ -14,9 +38,7 @@ def test_illegal_contact_can_require_multiple_history_hits() -> None:
+   force_history[2, 1, 0, 0] = 11.0
+   force_history[3, 0, (0, 1, 3), 0] = 11.0
+   env = SimpleNamespace(
+-    scene={
+-      "touch": SimpleNamespace(data=SimpleNamespace(force_history=force_history))
+-    }
++    scene={"touch": SimpleNamespace(data=SimpleNamespace(force_history=force_history))}
+   )
+ 
+   terminated = illegal_contact(

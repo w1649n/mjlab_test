@@ -51,6 +51,8 @@ class UniformVelocityCommand(CommandTerm):
     _validate_directional_bucket_fractions(
       self.cfg.rel_forward_envs, self.cfg.rel_backward_envs
     )
+    if self.cfg.directional_heading_hold and not self.cfg.heading_command:
+      raise ValueError("directional_heading_hold=True requires heading_command=True.")
 
     self.robot: Entity = env.scene[cfg.entity_name]
 
@@ -81,6 +83,17 @@ class UniformVelocityCommand(CommandTerm):
     self._backward_tracking_count = torch.zeros(
       self.num_envs, dtype=torch.long, device=self.device
     )
+
+    # 2026-10-16 stair-goals update: directional heading-hold envs latch their
+    # target heading on the next command update, after kinematics are current.
+    self._latch_heading = torch.zeros_like(self.is_heading_env)
+    # Seconds the command has stayed stationary; standing rewards use it to give
+    # the robot time to settle its feet before they apply.
+    self.stationary_time = torch.zeros(self.num_envs, device=self.device)
+    # Per-episode commanded planar path length and the part of it the robot
+    # actually covered, both in meters. Terrain curricula read these at reset.
+    self._command_path = torch.zeros(self.num_envs, device=self.device)
+    self._command_progress = torch.zeros(self.num_envs, device=self.device)
 
     # Set by create_gui() when the viewer is active.
     self._joystick_enabled: viser.GuiCheckboxHandle | None = None
@@ -209,6 +222,17 @@ class UniformVelocityCommand(CommandTerm):
       "backward_tracking_count": self._backward_tracking_count[env_ids],
     }
 
+  def get_command_progress(
+    self, env_ids: torch.Tensor
+  ) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return the episode's commanded planar path and the progress made along it.
+
+    Progress integrates the body-frame planar velocity projected onto the commanded
+    direction, capped at the commanded speed, so it never exceeds the path. Like
+    the directional statistics, the values survive until the command resets.
+    """
+    return self._command_path[env_ids], self._command_progress[env_ids]
+
   # 2026-09-02 stair-training update: a resumed curriculum may restore a
   # later command stage after the environment's initial stage-0 reset.
   def resample_after_curriculum_restore(self) -> None:
@@ -218,6 +242,8 @@ class UniformVelocityCommand(CommandTerm):
     self._forward_tracking_count.zero_()
     self._backward_tracking_sum.zero_()
     self._backward_tracking_count.zero_()
+    self._command_path.zero_()
+    self._command_progress.zero_()
     self._resample(env_ids)
     self._update_command(env_ids)
     self._apply_manual_commands()
@@ -248,6 +274,24 @@ class UniformVelocityCommand(CommandTerm):
     self._forward_tracking_count += forward
     self._backward_tracking_sum += tracking_score * backward
     self._backward_tracking_count += backward
+
+  def _accumulate_command_progress(self, dt: float | torch.Tensor) -> None:
+    """Integrate the commanded planar path and the progress made along it."""
+    command_xy = self.vel_command_b[:, :2]
+    speed = torch.norm(command_xy, dim=-1)
+    direction = command_xy / speed.clamp(min=1e-6).unsqueeze(-1)
+    along = torch.sum(self.robot.data.root_link_lin_vel_b[:, :2] * direction, dim=-1)
+    self._command_path += speed * dt
+    self._command_progress += torch.minimum(along, speed) * dt
+
+  def _update_stationary_time(self, dt: float | torch.Tensor) -> None:
+    magnitude = torch.norm(self.vel_command_b[:, :2], dim=1) + torch.abs(
+      self.vel_command_b[:, 2]
+    )
+    stationary = magnitude <= self.cfg.stationary_command_threshold
+    self.stationary_time = torch.where(
+      stationary, self.stationary_time + dt, torch.zeros_like(self.stationary_time)
+    )
 
   def _resample_command(self, env_ids: torch.Tensor) -> None:
     r = torch.empty(len(env_ids), device=self.device)
@@ -285,6 +329,12 @@ class UniformVelocityCommand(CommandTerm):
     directional_ids = env_ids[is_forward | is_backward]
     self.is_heading_env[directional_ids] = False
     self.is_world_env[directional_ids] = False
+    # 2026-10-16 stair-goals update: optionally steer straight segments back to
+    # their starting heading through ang_vel_z, as a deployed heading hold would.
+    self._latch_heading[env_ids] = False
+    if self.cfg.directional_heading_hold:
+      self.is_heading_env[directional_ids] = True
+      self._latch_heading[directional_ids] = True
 
     fwd_ids = env_ids[is_forward]
     if len(fwd_ids) > 0:
@@ -342,6 +392,9 @@ class UniformVelocityCommand(CommandTerm):
     self._forward_tracking_count[env_ids] = 0
     self._backward_tracking_sum[env_ids] = 0.0
     self._backward_tracking_count[env_ids] = 0
+    self._command_path[env_ids] = 0.0
+    self._command_progress[env_ids] = 0.0
+    self.stationary_time[env_ids] = 0.0
     self._apply_manual_commands()
     if self.cfg.init_velocity_prob > 0.0:
       assert isinstance(env_ids, torch.Tensor)
@@ -360,6 +413,12 @@ class UniformVelocityCommand(CommandTerm):
     # Pure function of the current state; refreshing all envs is safe.
     del env_ids
     if self.cfg.heading_command:
+      # Reset-path resamples run before sim.forward(), when heading_w still holds
+      # the terminal pose; latching here sees the current kinematics.
+      self.heading_target = torch.where(
+        self._latch_heading, self.robot.data.heading_w, self.heading_target
+      )
+      self._latch_heading.zero_()
       self.heading_error = wrap_to_pi(self.heading_target - self.robot.data.heading_w)
       heading_ids = self.is_heading_env.nonzero(as_tuple=False).flatten()
       self.vel_command_b[heading_ids, 2] = torch.clip(
@@ -449,6 +508,7 @@ class UniformVelocityCommand(CommandTerm):
     # just-finished step before timer expiry can resample it.  A per-env zero dt
     # on auto-reset prevents freshly reset environments from adding a fake sample.
     self._accumulate_directional_tracking(dt)
+    self._accumulate_command_progress(dt)
     super().compute(dt, env_ids)
     self._apply_manual_commands()
     if self._joystick_enabled is not None and self._joystick_enabled.value:
@@ -456,6 +516,7 @@ class UniformVelocityCommand(CommandTerm):
       idx = self._joystick_get_env_idx()
       for i, s in enumerate(self._joystick_sliders):
         self.vel_command_b[idx, i] = s.value
+    self._update_stationary_time(dt)
 
   # Visualization.
 
@@ -559,6 +620,17 @@ class UniformVelocityCommandCfg(CommandTermCfg):
   remain unrestricted within ``ranges`` so a trained policy can later be
   evaluated or fine-tuned with mixed commands.
   """
+  directional_heading_hold: bool = False
+  """Hold the starting heading in the straight forward/backward buckets.
+
+  Requires ``heading_command``. Directional envs become heading envs whose target
+  is the robot heading when the segment starts, so ``ang_vel_z`` carries the
+  ``heading_control_stiffness`` correction instead of a constant zero. This matches
+  a deployment-side heading hold that turns IMU yaw error into a yaw-rate command.
+  """
+  stationary_command_threshold: float = 0.05
+  """Command magnitude (``|v_xy| + |w_z|``) at or below which the command counts as
+  stationary for ``UniformVelocityCommand.stationary_time``."""
 
   @dataclass
   class Ranges:
@@ -583,6 +655,8 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     _validate_directional_bucket_fractions(
       self.rel_forward_envs, self.rel_backward_envs
     )
+    if self.directional_heading_hold and not self.heading_command:
+      raise ValueError("directional_heading_hold=True requires heading_command=True.")
     if self.heading_command and self.ranges.heading is None:
       raise ValueError(
         "The velocity command has heading commands active (heading_command=True) but "

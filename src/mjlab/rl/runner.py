@@ -32,6 +32,10 @@ class MjlabOnPolicyRunner(OnPolicyRunner):
         if train_cfg[key].get("rnn_type") is None:
           for opt in ("rnn_type", "rnn_hidden_dim", "rnn_num_layers"):
             train_cfg[key].pop(opt, None)
+    # Only PPO accepts symmetry_cfg; drop it when unused so other algorithms work.
+    algorithm = train_cfg.get("algorithm", {})
+    if algorithm.get("symmetry_cfg") is None:
+      algorithm.pop("symmetry_cfg", None)
     super().__init__(env, train_cfg, log_dir, device)
 
   def export_policy_to_onnx(

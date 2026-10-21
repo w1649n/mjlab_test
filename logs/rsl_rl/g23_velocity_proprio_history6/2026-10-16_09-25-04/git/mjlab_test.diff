@@ -1,0 +1,535 @@
+--- git commit ---
+593b8c8135ad8569fe82697619806841ee6411ad
+
+
+--- git status ---
+On branch vendor/rl-mpc-controller
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   docs/source/changelog.rst
+	modified:   src/mjlab/asset_zoo/robots/__init__.py
+	modified:   src/mjlab/asset_zoo/robots/syncai_g23/g23_constants.py
+	modified:   src/mjlab/tasks/velocity/config/g23/__init__.py
+	modified:   src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+	modified:   src/mjlab/tasks/velocity/mdp/__init__.py
+	modified:   src/mjlab/tasks/velocity/mdp/rewards.py
+	modified:   src/mjlab/tasks/velocity/mdp/terrain_utils.py
+	modified:   tests/test_velocity_task.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	policy_export/
+	src/mjlab/tasks/velocity/mdp/events.py
+	tests/test_velocity_motor_heat.py
+	tests/test_velocity_stair_heading.py
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/docs/source/changelog.rst b/docs/source/changelog.rst
+index e14e3a7..07a05b3 100644
+--- a/docs/source/changelog.rst
++++ b/docs/source/changelog.rst
+@@ -8,6 +8,20 @@ Upcoming version (not yet released)
+ Added
+ ^^^^^
+ 
++- Added ``Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw-J60``, which
++  limits G23 joint torque to the J60 torque-speed curve (peak 19.94 / 30.5 Nm,
++  no-load 24.18 / 15.49 rad/s, with J60 rotor inertia), raises the stair heading
++  weight to -10, and adds a ``motor_heat_l2`` penalty on actuator torque relative
++  to the J60 rated torque. Observations match StairYaw, so its checkpoints can be
++  resumed directly.
++
++- Added ``Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw``, a copy of
++  the History6 stair task that keeps straight stair commands head-on. Robots on
++  pyramid stairs spawn facing a stair axis (within 10 degrees), and the new
++  ``straight_heading_deviation_l2`` reward penalizes heading drift during
++  straight forward/backward commands on stairs. Observations are unchanged, so
++  History6 checkpoints can be resumed directly.
++
+ - Added an interactive RLMPC ONNX export shell script with run/checkpoint
+   selection, custom output paths, overwrite confirmation, and dry-run support.
+ 
+diff --git a/src/mjlab/asset_zoo/robots/__init__.py b/src/mjlab/asset_zoo/robots/__init__.py
+index c884fd5..7c3f350 100644
+--- a/src/mjlab/asset_zoo/robots/__init__.py
++++ b/src/mjlab/asset_zoo/robots/__init__.py
+@@ -13,6 +13,12 @@ from mjlab.asset_zoo.robots.syncai_g23.g23_constants import (
+ from mjlab.asset_zoo.robots.syncai_g23.g23_constants import (
+   G23_GETUP_ACTION_SCALE as G23_GETUP_ACTION_SCALE,
+ )
++from mjlab.asset_zoo.robots.syncai_g23.g23_constants import (
++  G23_J60_RATED_TORQUE as G23_J60_RATED_TORQUE,
++)
++from mjlab.asset_zoo.robots.syncai_g23.g23_constants import (
++  get_g23_j60_robot_cfg as get_g23_j60_robot_cfg,
++)
+ from mjlab.asset_zoo.robots.syncai_g23.g23_constants import (
+   get_g23_rl_mpc_robot_cfg as get_g23_rl_mpc_robot_cfg,
+ )
+diff --git a/src/mjlab/asset_zoo/robots/syncai_g23/g23_constants.py b/src/mjlab/asset_zoo/robots/syncai_g23/g23_constants.py
+index 36dafe4..18a743c 100644
+--- a/src/mjlab/asset_zoo/robots/syncai_g23/g23_constants.py
++++ b/src/mjlab/asset_zoo/robots/syncai_g23/g23_constants.py
+@@ -4,7 +4,11 @@ from pathlib import Path
+ 
+ import mujoco
+ 
+-from mjlab.actuator import BuiltinMotorActuatorCfg, BuiltinPositionActuatorCfg
++from mjlab.actuator import (
++  BuiltinMotorActuatorCfg,
++  BuiltinPositionActuatorCfg,
++  DcMotorActuatorCfg,
++)
+ from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
+ from mjlab.utils.spec_config import CollisionCfg
+ 
+@@ -64,6 +68,48 @@ G23_KNEE_ACTUATOR = BuiltinPositionActuatorCfg(
+   delay_max_lag=1,
+ )
+ 
++# J60 joint modules (quadruped_robot_controller/docs/J60.pdf): HipX/HipY use J60-6
++# and the knee uses J60-10, both without extra reduction. Motoring torque falls
++# linearly from the peak at standstill to zero at the 24 V no-load speed; braking
++# torque stays at the peak. This matches the controller's J60 simulation model.
++# The curve is applied by an explicit PD law, which is unstable at the 5 ms physics
++# step on the zero-armature knee link (kd=1 chatters and the policy falls). The rotor
++# inertias are the controller's J60 estimates and keep the explicit PD stable.
++G23_J60_6_PEAK_TORQUE = 19.94
++G23_J60_6_MAX_SPEED = 24.18
++G23_J60_10_PEAK_TORQUE = 30.5
++G23_J60_10_MAX_SPEED = 15.49
++G23_J60_6_ARMATURE = 0.004
++G23_J60_10_ARMATURE = 0.0089
++G23_J60_RATED_TORQUE: dict[str, float] = {
++  r".*_Hip[XY]_joint": 6.09,
++  r".*_Knee_joint": 9.58,
++}
++
++G23_J60_HIP_ACTUATOR = DcMotorActuatorCfg(
++  target_names_expr=(r".*_Hip[XY]_joint",),
++  stiffness=30.0,
++  damping=1.0,
++  saturation_effort=G23_J60_6_PEAK_TORQUE,
++  effort_limit=G23_J60_6_PEAK_TORQUE,
++  velocity_limit=G23_J60_6_MAX_SPEED,
++  armature=G23_J60_6_ARMATURE,
++  delay_min_lag=0,
++  delay_max_lag=1,
++)
++
++G23_J60_KNEE_ACTUATOR = DcMotorActuatorCfg(
++  target_names_expr=(r".*_Knee_joint",),
++  stiffness=30.0,
++  damping=1.0,
++  saturation_effort=G23_J60_10_PEAK_TORQUE,
++  effort_limit=G23_J60_10_PEAK_TORQUE,
++  velocity_limit=G23_J60_10_MAX_SPEED,
++  armature=G23_J60_10_ARMATURE,
++  delay_min_lag=0,
++  delay_max_lag=1,
++)
++
+ # RL-MPC bypasses MuJoCo's position servos and writes the controller's joint
+ # torques directly.  Keep these actuators separate from the existing locomotion
+ # configuration so position-policy checkpoints retain their original semantics.
+@@ -143,6 +189,11 @@ G23_ARTICULATION = EntityArticulationInfoCfg(
+   soft_joint_pos_limit_factor=0.99,
+ )
+ 
++G23_J60_ARTICULATION = EntityArticulationInfoCfg(
++  actuators=(G23_J60_HIP_ACTUATOR, G23_J60_KNEE_ACTUATOR),
++  soft_joint_pos_limit_factor=0.99,
++)
++
+ G23_RLMPC_ARTICULATION = EntityArticulationInfoCfg(
+   actuators=(G23_RLMPC_HIP_ACTUATOR, G23_RLMPC_KNEE_ACTUATOR),
+   soft_joint_pos_limit_factor=0.99,
+@@ -160,6 +211,17 @@ def get_g23_robot_cfg() -> EntityCfg:
+   )
+ 
+ 
++def get_g23_j60_robot_cfg() -> EntityCfg:
++  """Return a G23 configuration whose joints follow the J60 torque-speed limits."""
++  return EntityCfg(
++    init_state=HOME_KEYFRAME,
++    collisions=(FULL_COLLISION,),
++    spec_fn=get_spec,
++    articulation=G23_J60_ARTICULATION,
++    sort_actuators=True,
++  )
++
++
+ def get_g23_rl_mpc_robot_cfg() -> EntityCfg:
+   """Return a fresh torque-actuated G23 configuration for RL-MPC."""
+   return EntityCfg(
+diff --git a/src/mjlab/tasks/velocity/config/g23/__init__.py b/src/mjlab/tasks/velocity/config/g23/__init__.py
+index 8ae99ea..aa2f6af 100644
+--- a/src/mjlab/tasks/velocity/config/g23/__init__.py
++++ b/src/mjlab/tasks/velocity/config/g23/__init__.py
+@@ -7,6 +7,8 @@ from .env_cfgs import (
+   syncai_g23_rough_env_cfg,
+   syncai_g23_rough_proprio_env_cfg,
+   syncai_g23_rough_proprio_history6_env_cfg,
++  syncai_g23_rough_proprio_history6_stair_yaw_env_cfg,
++  syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg,
+ )
+ from .rl_cfg import syncai_g23_ppo_runner_cfg
+ 
+@@ -44,6 +46,26 @@ register_mjlab_task(
+   runner_cls=VelocityOnPolicyRunner,
+ )
+ 
++# 2026-10-15 stair-yaw update: History6 plus a stair heading-drift penalty. It
++# shares the History6 experiment so existing runs can be resumed with --load-run.
++register_mjlab_task(
++  task_id="Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw",
++  env_cfg=syncai_g23_rough_proprio_history6_stair_yaw_env_cfg(),
++  play_env_cfg=syncai_g23_rough_proprio_history6_stair_yaw_env_cfg(play=True),
++  rl_cfg=syncai_g23_ppo_runner_cfg(experiment_name="g23_velocity_proprio_history6"),
++  runner_cls=VelocityOnPolicyRunner,
++)
++
++# 2026-10-16 J60 update: StairYaw with heading weight -10, J60 torque-speed limits,
++# and a motor heating penalty. Shares the experiment so StairYaw runs can resume.
++register_mjlab_task(
++  task_id="Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw-J60",
++  env_cfg=syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg(),
++  play_env_cfg=syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg(play=True),
++  rl_cfg=syncai_g23_ppo_runner_cfg(experiment_name="g23_velocity_proprio_history6"),
++  runner_cls=VelocityOnPolicyRunner,
++)
++
+ register_mjlab_task(
+   task_id="Mjlab-Velocity-Flat-SyncAI-G23-Proprio",
+   env_cfg=syncai_g23_flat_proprio_env_cfg(),
+diff --git a/src/mjlab/tasks/velocity/config/g23/env_cfgs.py b/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+index cc70a01..48eb0f4 100644
+--- a/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
++++ b/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+@@ -6,6 +6,8 @@ from typing import Any, cast
+ from mjlab.asset_zoo.robots import (
+   G23_ACTION_SCALE,
+   G23_FOOT_SITE_NAMES,
++  G23_J60_RATED_TORQUE,
++  get_g23_j60_robot_cfg,
+   get_g23_robot_cfg,
+ )
+ from mjlab.envs import ManagerBasedRlEnvCfg
+@@ -64,6 +66,17 @@ _G23_GATE_MAX_FOOT_AIR_TIME = 0.80
+ _G23_TERMINATION_MAX_FOOT_AIR_TIME = 2.0
+ _G23_EXCESSIVE_FOOT_AIR_TIME_WEIGHT = -4.0
+ _G23_STANDING_MISSING_CONTACT_WEIGHT = -0.5
++# 2026-10-15 stair-yaw update: straight stair commands should climb and descend
++# head-on instead of drifting into a diagonal approach.
++_G23_STAIR_TERRAIN_NAMES = ("pyramid_stairs", "pyramid_stairs_inv")
++_G23_STAIR_SPAWN_YAW_NOISE = math.radians(10.0)
++_G23_STAIR_HEADING_DEVIATION_WEIGHT = -2.0
++# 2026-10-16 J60 update: -10 (run stair_yaw_w10) cut uphill heading drift from
++# ~13 deg to ~4 deg at 1 m/s. Climbing 20 cm stairs heated the hind HipY motors to
++# ~2.4x their rated load, so the J60 task also limits torque to the motor's
++# torque-speed curve and penalizes heating relative to the rated torque.
++_G23_J60_STAIR_HEADING_DEVIATION_WEIGHT = -10.0
++_G23_MOTOR_HEAT_WEIGHT = -0.03
+ 
+ _G23_PROPRIO_TERM_ORDER = (
+   "base_ang_vel",
+@@ -608,6 +621,50 @@ def syncai_g23_rough_proprio_history6_env_cfg(
+   return cfg
+ 
+ 
++def syncai_g23_rough_proprio_history6_stair_yaw_env_cfg(
++  play: bool = False,
++) -> ManagerBasedRlEnvCfg:
++  """History6 stair task that keeps straight stair commands head-on."""
++  cfg = syncai_g23_rough_proprio_history6_env_cfg(play=play)
++  # Observations are unchanged, so History6 checkpoints can be fine-tuned here.
++  # Pyramid stair edges are axis-aligned: spawn facing a stair axis, then charge
++  # straight forward/backward segments for any heading lost while traversing.
++  reset_base = cfg.events["reset_base"]
++  cfg.events["reset_base"] = EventTermCfg(
++    func=mdp.reset_root_state_stair_aligned,
++    mode="reset",
++    params={
++      **reset_base.params,
++      "terrain_names": _G23_STAIR_TERRAIN_NAMES,
++      "yaw_noise": _G23_STAIR_SPAWN_YAW_NOISE,
++    },
++  )
++  cfg.rewards["stair_heading_deviation"] = RewardTermCfg(
++    func=mdp.straight_heading_deviation_l2,
++    weight=_G23_STAIR_HEADING_DEVIATION_WEIGHT,
++    params={"command_name": "twist", "terrain_names": _G23_STAIR_TERRAIN_NAMES},
++  )
++  return cfg
++
++
++def syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg(
++  play: bool = False,
++) -> ManagerBasedRlEnvCfg:
++  """StairYaw task with J60 torque-speed limits and a motor heating penalty."""
++  cfg = syncai_g23_rough_proprio_history6_stair_yaw_env_cfg(play=play)
++  # Observations are unchanged, so StairYaw checkpoints can be fine-tuned here.
++  cfg.scene.entities = {"robot": get_g23_j60_robot_cfg()}
++  cfg.rewards[
++    "stair_heading_deviation"
++  ].weight = _G23_J60_STAIR_HEADING_DEVIATION_WEIGHT
++  cfg.rewards["motor_heat"] = RewardTermCfg(
++    func=mdp.motor_heat_l2,
++    weight=_G23_MOTOR_HEAT_WEIGHT,
++    params={"rated_torque": G23_J60_RATED_TORQUE},
++  )
++  return cfg
++
++
+ def syncai_g23_flat_stand_history6_env_cfg(
+   play: bool = False,
+ ) -> ManagerBasedRlEnvCfg:
+diff --git a/src/mjlab/tasks/velocity/mdp/__init__.py b/src/mjlab/tasks/velocity/mdp/__init__.py
+index 1d3be52..4acfc8a 100644
+--- a/src/mjlab/tasks/velocity/mdp/__init__.py
++++ b/src/mjlab/tasks/velocity/mdp/__init__.py
+@@ -1,6 +1,7 @@
+ from mjlab.envs.mdp import *  # noqa: F401, F403
+ 
+ from .curriculums import *  # noqa: F403
++from .events import *  # noqa: F403
+ from .observations import *  # noqa: F403
+ from .rewards import *  # noqa: F403
+ from .terminations import *  # noqa: F403
+diff --git a/src/mjlab/tasks/velocity/mdp/rewards.py b/src/mjlab/tasks/velocity/mdp/rewards.py
+index 3b319e2..7ed6000 100644
+--- a/src/mjlab/tasks/velocity/mdp/rewards.py
++++ b/src/mjlab/tasks/velocity/mdp/rewards.py
+@@ -1,7 +1,7 @@
+ from __future__ import annotations
+ 
+ import math
+-from typing import TYPE_CHECKING
++from typing import TYPE_CHECKING, cast
+ 
+ import numpy as np
+ import torch
+@@ -11,14 +11,18 @@ from mjlab.managers.reward_manager import RewardTermCfg
+ from mjlab.managers.scene_entity_config import SceneEntityCfg
+ from mjlab.sensor import BuiltinSensor, ContactSensor
+ from mjlab.sensor.terrain_height_sensor import TerrainHeightSensor
+-from mjlab.tasks.velocity.mdp.terrain_utils import terrain_normal_from_sensors
+-from mjlab.utils.lab_api.math import quat_apply, quat_apply_inverse
++from mjlab.tasks.velocity.mdp.terrain_utils import (
++  terrain_normal_from_sensors,
++  terrain_type_lookup,
++)
++from mjlab.utils.lab_api.math import quat_apply, quat_apply_inverse, wrap_to_pi
+ from mjlab.utils.lab_api.string import (
+   resolve_matching_names_values,
+ )
+ 
+ if TYPE_CHECKING:
+   from mjlab.envs import ManagerBasedRlEnv
++  from mjlab.tasks.velocity.mdp.velocity_command import UniformVelocityCommand
+   from mjlab.viewer.debug_visualizer import DebugVisualizer
+ 
+ 
+@@ -160,6 +164,86 @@ def base_height_l2(
+   return torch.square(heights - target_height)
+ 
+ 
++class straight_heading_deviation_l2:
++  """Penalize yaw drift while a straight forward/backward command is active.
++
++  The reference heading is captured on the first step of each command segment, so
++  only heading lost while executing a straight command is charged. With
++  ``terrain_names`` the penalty is limited to those sub-terrains (e.g. stairs);
++  terrain without per-env types (play mode) is treated as eligible everywhere.
++  """
++
++  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
++    terrain_names = cfg.params.get("terrain_names")
++    self._terrain_lookup = (
++      None if terrain_names is None else terrain_type_lookup(env, terrain_names)
++    )
++    self._ref_heading = torch.zeros(env.num_envs, device=env.device)
++    # command_counter is never negative, so -1 forces a capture after reset.
++    self._ref_counter = torch.full(
++      (env.num_envs,), -1, dtype=torch.long, device=env.device
++    )
++
++  def __call__(
++    self,
++    env: ManagerBasedRlEnv,
++    command_name: str,
++    terrain_names: tuple[str, ...] | None = None,
++    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++  ) -> torch.Tensor:
++    del terrain_names  # Resolved in __init__.
++    asset: Entity = env.scene[asset_cfg.name]
++    command = cast("UniformVelocityCommand", env.command_manager.get_term(command_name))
++    heading = asset.data.heading_w
++    # A changed counter marks a resampled or freshly reset command segment.
++    new_segment = command.command_counter != self._ref_counter
++    self._ref_heading = torch.where(new_segment, heading, self._ref_heading)
++    self._ref_counter.copy_(command.command_counter)
++
++    active = command.is_forward_env | command.is_backward_env
++    if self._terrain_lookup is not None:
++      terrain = env.scene.terrain
++      assert terrain is not None
++      active = active & self._terrain_lookup[terrain.terrain_types]
++    error = wrap_to_pi(heading - self._ref_heading)
++    return torch.square(error) * active
++
++  def reset(self, env_ids: torch.Tensor | slice) -> None:
++    self._ref_counter[env_ids] = -1
++
++
++class motor_heat_l2:
++  """Penalize motor heating: actuator torque squared over each rated torque squared.
++
++  Copper loss scales with torque squared, so each actuator contributes its heating
++  relative to its continuous rating (1.0 = rated load). ``rated_torque`` maps
++  actuator-name regexes to rated torques; every actuator must match one entry.
++  """
++
++  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
++    asset_cfg: SceneEntityCfg = cfg.params.get("asset_cfg", _DEFAULT_ASSET_CFG)
++    asset: Entity = env.scene[asset_cfg.name]
++    names = asset.actuator_names
++    ids, _, values = resolve_matching_names_values(cfg.params["rated_torque"], names)
++    if sorted(ids) != list(range(len(names))):
++      missing = [n for i, n in enumerate(names) if i not in ids]
++      raise ValueError(f"No rated torque configured for actuators {missing}.")
++    rated = torch.zeros(len(names), device=env.device)
++    rated[ids] = torch.tensor(values, dtype=torch.float, device=env.device)
++    self._inv_rated_sq = 1.0 / torch.square(rated)
++
++  def __call__(
++    self,
++    env: ManagerBasedRlEnv,
++    rated_torque: dict[str, float],
++    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++  ) -> torch.Tensor:
++    del rated_torque  # Resolved in __init__.
++    asset: Entity = env.scene[asset_cfg.name]
++    torque = asset.data.actuator_force
++    return torch.sum(torch.square(torque) * self._inv_rated_sq, dim=1)
++
++
+ class upright:
+   """Reward for keeping the base upright.
+ 
+diff --git a/src/mjlab/tasks/velocity/mdp/terrain_utils.py b/src/mjlab/tasks/velocity/mdp/terrain_utils.py
+index 232c237..c67e148 100644
+--- a/src/mjlab/tasks/velocity/mdp/terrain_utils.py
++++ b/src/mjlab/tasks/velocity/mdp/terrain_utils.py
+@@ -1,4 +1,4 @@
+-"""Terrain normal estimation from raycast hit points."""
++"""Terrain helpers: normal estimation from raycast hits and sub-terrain lookup."""
+ 
+ from __future__ import annotations
+ 
+@@ -121,3 +121,27 @@ def terrain_normal_from_sensors(
+   points = torch.cat(all_points, dim=1)
+   valid_mask = torch.cat(all_valid, dim=1)
+   return fit_terrain_normal(points, valid_mask)
++
++
++def terrain_type_lookup(
++  env: ManagerBasedRlEnv, terrain_names: tuple[str, ...]
++) -> torch.Tensor | None:
++  """Return a per-column mask selecting ``terrain_names``, or None if unknown.
++
++  Curriculum terrain holds one sub-terrain type per column, so
++  ``lookup[terrain.terrain_types]`` marks the envs on those types. Random-grid
++  terrain (play mode) and planes have no per-env type; callers then treat every
++  env as eligible.
++  """
++  terrain = env.scene.terrain
++  if terrain is None or terrain.terrain_origins is None:
++    return None
++  generator = terrain.cfg.terrain_generator
++  assert generator is not None
++  type_names = tuple(generator.sub_terrains)
++  unknown = set(terrain_names) - set(type_names)
++  if unknown:
++    raise ValueError(f"Unknown terrain names: {sorted(unknown)}.")
++  if not generator.curriculum:
++    return None
++  return torch.tensor([name in terrain_names for name in type_names], device=env.device)
+diff --git a/tests/test_velocity_task.py b/tests/test_velocity_task.py
+index d848943..102d921 100644
+--- a/tests/test_velocity_task.py
++++ b/tests/test_velocity_task.py
+@@ -4,6 +4,7 @@ from dataclasses import asdict
+ 
+ import pytest
+ 
++from mjlab.actuator import DcMotorActuatorCfg
+ from mjlab.asset_zoo.robots import G1_ACTION_SCALE, G23_ACTION_SCALE, GO1_ACTION_SCALE
+ from mjlab.envs.mdp.actions import JointPositionActionCfg
+ from mjlab.tasks.registry import list_tasks, load_env_cfg
+@@ -27,6 +28,61 @@ def test_g23_stand_preserves_history6_observations_and_zero_command_play():
+   assert "randomize_terrain" not in play_cfg.events
+ 
+ 
++def test_g23_stair_yaw_extends_history6_without_changing_observations():
++  original = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6")
++  cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw")
++  assert asdict(cfg.observations["actor"]) == asdict(original.observations["actor"])
++  assert asdict(cfg.observations["critic"]) == asdict(original.observations["critic"])
++  stairs = ("pyramid_stairs", "pyramid_stairs_inv")
++
++  reset_base = cfg.events["reset_base"]
++  assert reset_base.func is mdp.reset_root_state_stair_aligned
++  assert reset_base.params["terrain_names"] == stairs
++  assert (
++    reset_base.params["pose_range"]
++    == (original.events["reset_base"].params["pose_range"])
++  )
++
++  heading = cfg.rewards["stair_heading_deviation"]
++  assert heading.func is mdp.straight_heading_deviation_l2
++  assert heading.weight < 0.0
++  assert heading.params == {"command_name": "twist", "terrain_names": stairs}
++  assert "stair_heading_deviation" not in original.rewards
++
++
++def test_g23_stair_yaw_j60_limits_torque_and_penalizes_heating():
++  base = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw")
++  cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw-J60")
++  assert asdict(cfg.observations["actor"]) == asdict(base.observations["actor"])
++  assert asdict(cfg.observations["critic"]) == asdict(base.observations["critic"])
++
++  articulation = cfg.scene.entities["robot"].articulation
++  assert articulation is not None
++  limits = {}
++  for actuator in articulation.actuators:
++    assert isinstance(actuator, DcMotorActuatorCfg)
++    limits[actuator.target_names_expr] = (
++      actuator.saturation_effort,
++      actuator.effort_limit,
++      actuator.velocity_limit,
++      actuator.armature,
++    )
++  assert limits == {
++    (r".*_Hip[XY]_joint",): (19.94, 19.94, 24.18, 0.004),
++    (r".*_Knee_joint",): (30.5, 30.5, 15.49, 0.0089),
++  }
++
++  assert cfg.rewards["stair_heading_deviation"].weight == pytest.approx(-10.0)
++  heat = cfg.rewards["motor_heat"]
++  assert heat.func is mdp.motor_heat_l2
++  assert heat.weight < 0.0
++  assert heat.params["rated_torque"] == {
++    r".*_Hip[XY]_joint": 6.09,
++    r".*_Knee_joint": 9.58,
++  }
++  assert "motor_heat" not in base.rewards
++
++
+ @pytest.fixture(scope="module")
+ def velocity_task_ids() -> list[str]:
+   """Get all velocity task IDs."""

@@ -7,6 +7,7 @@ from .env_cfgs import (
   syncai_g23_rough_env_cfg,
   syncai_g23_rough_proprio_env_cfg,
   syncai_g23_rough_proprio_history6_env_cfg,
+  syncai_g23_rough_proprio_history6_stair_goals_env_cfg,
   syncai_g23_rough_proprio_history6_stair_yaw_env_cfg,
   syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg,
 )
@@ -63,6 +64,23 @@ register_mjlab_task(
   env_cfg=syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg(),
   play_env_cfg=syncai_g23_rough_proprio_history6_stair_yaw_j60_env_cfg(play=True),
   rl_cfg=syncai_g23_ppo_runner_cfg(experiment_name="g23_velocity_proprio_history6"),
+  runner_cls=VelocityOnPolicyRunner,
+)
+
+# 2026-10-16 stair-goals update: J60 StairYaw plus heading-hold straight commands,
+# 5-25 cm stairs with a command-following curriculum, riser-scaled foot clearance,
+# stance settling, an above-rating heating penalty, and left-right symmetry
+# augmentation. Shares the experiment so StairYaw and J60 runs can resume.
+register_mjlab_task(
+  task_id="Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-J60-StairGoals",
+  env_cfg=syncai_g23_rough_proprio_history6_stair_goals_env_cfg(),
+  play_env_cfg=syncai_g23_rough_proprio_history6_stair_goals_env_cfg(play=True),
+  # Lower entropy while fine-tuning: the first run's action std grew 0.43 -> 0.59.
+  rl_cfg=syncai_g23_ppo_runner_cfg(
+    experiment_name="g23_velocity_proprio_history6",
+    symmetry=True,
+    entropy_coef=0.003,
+  ),
   runner_cls=VelocityOnPolicyRunner,
 )
 

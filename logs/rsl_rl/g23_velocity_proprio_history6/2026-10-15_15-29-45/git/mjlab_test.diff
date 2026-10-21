@@ -1,0 +1,294 @@
+--- git commit ---
+593b8c8135ad8569fe82697619806841ee6411ad
+
+
+--- git status ---
+On branch vendor/rl-mpc-controller
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   docs/source/changelog.rst
+	modified:   src/mjlab/tasks/velocity/config/g23/__init__.py
+	modified:   src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+	modified:   src/mjlab/tasks/velocity/mdp/__init__.py
+	modified:   src/mjlab/tasks/velocity/mdp/rewards.py
+	modified:   src/mjlab/tasks/velocity/mdp/terrain_utils.py
+	modified:   tests/test_velocity_task.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	src/mjlab/tasks/velocity/mdp/events.py
+	tests/test_velocity_stair_heading.py
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/docs/source/changelog.rst b/docs/source/changelog.rst
+index e14e3a7..8ce953d 100644
+--- a/docs/source/changelog.rst
++++ b/docs/source/changelog.rst
+@@ -8,6 +8,13 @@ Upcoming version (not yet released)
+ Added
+ ^^^^^
+ 
++- Added ``Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw``, a copy of
++  the History6 stair task that keeps straight stair commands head-on. Robots on
++  pyramid stairs spawn facing a stair axis (within 10 degrees), and the new
++  ``straight_heading_deviation_l2`` reward penalizes heading drift during
++  straight forward/backward commands on stairs. Observations are unchanged, so
++  History6 checkpoints can be resumed directly.
++
+ - Added an interactive RLMPC ONNX export shell script with run/checkpoint
+   selection, custom output paths, overwrite confirmation, and dry-run support.
+ 
+diff --git a/src/mjlab/tasks/velocity/config/g23/__init__.py b/src/mjlab/tasks/velocity/config/g23/__init__.py
+index 8ae99ea..eb67520 100644
+--- a/src/mjlab/tasks/velocity/config/g23/__init__.py
++++ b/src/mjlab/tasks/velocity/config/g23/__init__.py
+@@ -7,6 +7,7 @@ from .env_cfgs import (
+   syncai_g23_rough_env_cfg,
+   syncai_g23_rough_proprio_env_cfg,
+   syncai_g23_rough_proprio_history6_env_cfg,
++  syncai_g23_rough_proprio_history6_stair_yaw_env_cfg,
+ )
+ from .rl_cfg import syncai_g23_ppo_runner_cfg
+ 
+@@ -44,6 +45,16 @@ register_mjlab_task(
+   runner_cls=VelocityOnPolicyRunner,
+ )
+ 
++# 2026-10-15 stair-yaw update: History6 plus a stair heading-drift penalty. It
++# shares the History6 experiment so existing runs can be resumed with --load-run.
++register_mjlab_task(
++  task_id="Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw",
++  env_cfg=syncai_g23_rough_proprio_history6_stair_yaw_env_cfg(),
++  play_env_cfg=syncai_g23_rough_proprio_history6_stair_yaw_env_cfg(play=True),
++  rl_cfg=syncai_g23_ppo_runner_cfg(experiment_name="g23_velocity_proprio_history6"),
++  runner_cls=VelocityOnPolicyRunner,
++)
++
+ register_mjlab_task(
+   task_id="Mjlab-Velocity-Flat-SyncAI-G23-Proprio",
+   env_cfg=syncai_g23_flat_proprio_env_cfg(),
+diff --git a/src/mjlab/tasks/velocity/config/g23/env_cfgs.py b/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+index cc70a01..3010f77 100644
+--- a/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
++++ b/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+@@ -64,6 +64,11 @@ _G23_GATE_MAX_FOOT_AIR_TIME = 0.80
+ _G23_TERMINATION_MAX_FOOT_AIR_TIME = 2.0
+ _G23_EXCESSIVE_FOOT_AIR_TIME_WEIGHT = -4.0
+ _G23_STANDING_MISSING_CONTACT_WEIGHT = -0.5
++# 2026-10-15 stair-yaw update: straight stair commands should climb and descend
++# head-on instead of drifting into a diagonal approach.
++_G23_STAIR_TERRAIN_NAMES = ("pyramid_stairs", "pyramid_stairs_inv")
++_G23_STAIR_SPAWN_YAW_NOISE = math.radians(10.0)
++_G23_STAIR_HEADING_DEVIATION_WEIGHT = -2.0
+ 
+ _G23_PROPRIO_TERM_ORDER = (
+   "base_ang_vel",
+@@ -608,6 +613,32 @@ def syncai_g23_rough_proprio_history6_env_cfg(
+   return cfg
+ 
+ 
++def syncai_g23_rough_proprio_history6_stair_yaw_env_cfg(
++  play: bool = False,
++) -> ManagerBasedRlEnvCfg:
++  """History6 stair task that keeps straight stair commands head-on."""
++  cfg = syncai_g23_rough_proprio_history6_env_cfg(play=play)
++  # Observations are unchanged, so History6 checkpoints can be fine-tuned here.
++  # Pyramid stair edges are axis-aligned: spawn facing a stair axis, then charge
++  # straight forward/backward segments for any heading lost while traversing.
++  reset_base = cfg.events["reset_base"]
++  cfg.events["reset_base"] = EventTermCfg(
++    func=mdp.reset_root_state_stair_aligned,
++    mode="reset",
++    params={
++      **reset_base.params,
++      "terrain_names": _G23_STAIR_TERRAIN_NAMES,
++      "yaw_noise": _G23_STAIR_SPAWN_YAW_NOISE,
++    },
++  )
++  cfg.rewards["stair_heading_deviation"] = RewardTermCfg(
++    func=mdp.straight_heading_deviation_l2,
++    weight=_G23_STAIR_HEADING_DEVIATION_WEIGHT,
++    params={"command_name": "twist", "terrain_names": _G23_STAIR_TERRAIN_NAMES},
++  )
++  return cfg
++
++
+ def syncai_g23_flat_stand_history6_env_cfg(
+   play: bool = False,
+ ) -> ManagerBasedRlEnvCfg:
+diff --git a/src/mjlab/tasks/velocity/mdp/__init__.py b/src/mjlab/tasks/velocity/mdp/__init__.py
+index 1d3be52..4acfc8a 100644
+--- a/src/mjlab/tasks/velocity/mdp/__init__.py
++++ b/src/mjlab/tasks/velocity/mdp/__init__.py
+@@ -1,6 +1,7 @@
+ from mjlab.envs.mdp import *  # noqa: F401, F403
+ 
+ from .curriculums import *  # noqa: F403
++from .events import *  # noqa: F403
+ from .observations import *  # noqa: F403
+ from .rewards import *  # noqa: F403
+ from .terminations import *  # noqa: F403
+diff --git a/src/mjlab/tasks/velocity/mdp/rewards.py b/src/mjlab/tasks/velocity/mdp/rewards.py
+index 3b319e2..f9c6abe 100644
+--- a/src/mjlab/tasks/velocity/mdp/rewards.py
++++ b/src/mjlab/tasks/velocity/mdp/rewards.py
+@@ -1,7 +1,7 @@
+ from __future__ import annotations
+ 
+ import math
+-from typing import TYPE_CHECKING
++from typing import TYPE_CHECKING, cast
+ 
+ import numpy as np
+ import torch
+@@ -11,14 +11,18 @@ from mjlab.managers.reward_manager import RewardTermCfg
+ from mjlab.managers.scene_entity_config import SceneEntityCfg
+ from mjlab.sensor import BuiltinSensor, ContactSensor
+ from mjlab.sensor.terrain_height_sensor import TerrainHeightSensor
+-from mjlab.tasks.velocity.mdp.terrain_utils import terrain_normal_from_sensors
+-from mjlab.utils.lab_api.math import quat_apply, quat_apply_inverse
++from mjlab.tasks.velocity.mdp.terrain_utils import (
++  terrain_normal_from_sensors,
++  terrain_type_lookup,
++)
++from mjlab.utils.lab_api.math import quat_apply, quat_apply_inverse, wrap_to_pi
+ from mjlab.utils.lab_api.string import (
+   resolve_matching_names_values,
+ )
+ 
+ if TYPE_CHECKING:
+   from mjlab.envs import ManagerBasedRlEnv
++  from mjlab.tasks.velocity.mdp.velocity_command import UniformVelocityCommand
+   from mjlab.viewer.debug_visualizer import DebugVisualizer
+ 
+ 
+@@ -160,6 +164,54 @@ def base_height_l2(
+   return torch.square(heights - target_height)
+ 
+ 
++class straight_heading_deviation_l2:
++  """Penalize yaw drift while a straight forward/backward command is active.
++
++  The reference heading is captured on the first step of each command segment, so
++  only heading lost while executing a straight command is charged. With
++  ``terrain_names`` the penalty is limited to those sub-terrains (e.g. stairs);
++  terrain without per-env types (play mode) is treated as eligible everywhere.
++  """
++
++  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
++    terrain_names = cfg.params.get("terrain_names")
++    self._terrain_lookup = (
++      None if terrain_names is None else terrain_type_lookup(env, terrain_names)
++    )
++    self._ref_heading = torch.zeros(env.num_envs, device=env.device)
++    # command_counter is never negative, so -1 forces a capture after reset.
++    self._ref_counter = torch.full(
++      (env.num_envs,), -1, dtype=torch.long, device=env.device
++    )
++
++  def __call__(
++    self,
++    env: ManagerBasedRlEnv,
++    command_name: str,
++    terrain_names: tuple[str, ...] | None = None,
++    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++  ) -> torch.Tensor:
++    del terrain_names  # Resolved in __init__.
++    asset: Entity = env.scene[asset_cfg.name]
++    command = cast("UniformVelocityCommand", env.command_manager.get_term(command_name))
++    heading = asset.data.heading_w
++    # A changed counter marks a resampled or freshly reset command segment.
++    new_segment = command.command_counter != self._ref_counter
++    self._ref_heading = torch.where(new_segment, heading, self._ref_heading)
++    self._ref_counter.copy_(command.command_counter)
++
++    active = command.is_forward_env | command.is_backward_env
++    if self._terrain_lookup is not None:
++      terrain = env.scene.terrain
++      assert terrain is not None
++      active = active & self._terrain_lookup[terrain.terrain_types]
++    error = wrap_to_pi(heading - self._ref_heading)
++    return torch.square(error) * active
++
++  def reset(self, env_ids: torch.Tensor | slice) -> None:
++    self._ref_counter[env_ids] = -1
++
++
+ class upright:
+   """Reward for keeping the base upright.
+ 
+diff --git a/src/mjlab/tasks/velocity/mdp/terrain_utils.py b/src/mjlab/tasks/velocity/mdp/terrain_utils.py
+index 232c237..c67e148 100644
+--- a/src/mjlab/tasks/velocity/mdp/terrain_utils.py
++++ b/src/mjlab/tasks/velocity/mdp/terrain_utils.py
+@@ -1,4 +1,4 @@
+-"""Terrain normal estimation from raycast hit points."""
++"""Terrain helpers: normal estimation from raycast hits and sub-terrain lookup."""
+ 
+ from __future__ import annotations
+ 
+@@ -121,3 +121,27 @@ def terrain_normal_from_sensors(
+   points = torch.cat(all_points, dim=1)
+   valid_mask = torch.cat(all_valid, dim=1)
+   return fit_terrain_normal(points, valid_mask)
++
++
++def terrain_type_lookup(
++  env: ManagerBasedRlEnv, terrain_names: tuple[str, ...]
++) -> torch.Tensor | None:
++  """Return a per-column mask selecting ``terrain_names``, or None if unknown.
++
++  Curriculum terrain holds one sub-terrain type per column, so
++  ``lookup[terrain.terrain_types]`` marks the envs on those types. Random-grid
++  terrain (play mode) and planes have no per-env type; callers then treat every
++  env as eligible.
++  """
++  terrain = env.scene.terrain
++  if terrain is None or terrain.terrain_origins is None:
++    return None
++  generator = terrain.cfg.terrain_generator
++  assert generator is not None
++  type_names = tuple(generator.sub_terrains)
++  unknown = set(terrain_names) - set(type_names)
++  if unknown:
++    raise ValueError(f"Unknown terrain names: {sorted(unknown)}.")
++  if not generator.curriculum:
++    return None
++  return torch.tensor([name in terrain_names for name in type_names], device=env.device)
+diff --git a/tests/test_velocity_task.py b/tests/test_velocity_task.py
+index d848943..7dc9c1d 100644
+--- a/tests/test_velocity_task.py
++++ b/tests/test_velocity_task.py
+@@ -27,6 +27,28 @@ def test_g23_stand_preserves_history6_observations_and_zero_command_play():
+   assert "randomize_terrain" not in play_cfg.events
+ 
+ 
++def test_g23_stair_yaw_extends_history6_without_changing_observations():
++  original = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6")
++  cfg = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw")
++  assert asdict(cfg.observations["actor"]) == asdict(original.observations["actor"])
++  assert asdict(cfg.observations["critic"]) == asdict(original.observations["critic"])
++  stairs = ("pyramid_stairs", "pyramid_stairs_inv")
++
++  reset_base = cfg.events["reset_base"]
++  assert reset_base.func is mdp.reset_root_state_stair_aligned
++  assert reset_base.params["terrain_names"] == stairs
++  assert (
++    reset_base.params["pose_range"]
++    == (original.events["reset_base"].params["pose_range"])
++  )
++
++  heading = cfg.rewards["stair_heading_deviation"]
++  assert heading.func is mdp.straight_heading_deviation_l2
++  assert heading.weight < 0.0
++  assert heading.params == {"command_name": "twist", "terrain_names": stairs}
++  assert "stair_heading_deviation" not in original.rewards
++
++
+ @pytest.fixture(scope="module")
+ def velocity_task_ids() -> list[str]:
+   """Get all velocity task IDs."""

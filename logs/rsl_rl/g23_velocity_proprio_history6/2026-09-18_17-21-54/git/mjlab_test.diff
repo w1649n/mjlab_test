@@ -1,0 +1,309 @@
+--- git commit ---
+2cfd67d286f4a24354ba0457aa72149ad70fe601
+
+
+--- git status ---
+On branch vendor/rl-mpc-controller
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   docs/source/changelog.rst
+	modified:   src/mjlab/tasks/rl_mpc/config/g23/env_cfgs.py
+	modified:   src/mjlab/tasks/velocity/config/g23/__init__.py
+	modified:   src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+	modified:   src/mjlab/tasks/velocity/mdp/rewards.py
+	modified:   tests/test_velocity_rewards.py
+	modified:   tests/test_velocity_task.py
+	modified:   thirdparty/rl-mpc-locomotion/MPC_Controller/convex_MPC/ConvexMPCLocomotion.py
+	modified:   thirdparty/rl-mpc-locomotion/RL_Environment/cfg/task/G23.yaml
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	analysis/rlmpc_20260915/
+	analysis/rlmpc_params_20260916/
+	docs/g23_history6_standing.md
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/docs/source/changelog.rst b/docs/source/changelog.rst
+index e91048b..e14e3a7 100644
+--- a/docs/source/changelog.rst
++++ b/docs/source/changelog.rst
+@@ -24,6 +24,9 @@ Added
+ Changed
+ ^^^^^^^
+ 
++- Set the bundled G23 MPC target body height to 0.32 m and fixed swing
++  clearance to 0.06 m for walking and stopping steps.
++
+ - Bundled the G23 RL-MPC controller and native solver sources in
+   ``thirdparty/rl-mpc-locomotion`` and made runtime loading and solver builds
+   prefer this copy over the adjacent development checkout.
+diff --git a/src/mjlab/tasks/rl_mpc/config/g23/env_cfgs.py b/src/mjlab/tasks/rl_mpc/config/g23/env_cfgs.py
+index bd0b3ab..c65ff44 100644
+--- a/src/mjlab/tasks/rl_mpc/config/g23/env_cfgs.py
++++ b/src/mjlab/tasks/rl_mpc/config/g23/env_cfgs.py
+@@ -126,9 +126,9 @@ def syncai_g23_rl_mpc_env_cfg(
+   # maximum 8 cm terrain. Stage one samples one command axis at a time so the
+   # residual policy first learns a stable foothold baseline; mixed-command
+   # fine-tuning can follow a stable checkpoint and a separate combined gate.
+-  twist.ranges.lin_vel_x = (-0.2, 0.5)
+-  twist.ranges.lin_vel_y = (-0.15, 0.15)
+-  twist.ranges.ang_vel_z = (-0.5, 0.5)
++  twist.ranges.lin_vel_x = (-0.8, 0.8)
++  twist.ranges.lin_vel_y = (-0.6, 0.6)
++  twist.ranges.ang_vel_z = (-1.5, 1.5)
+   twist.sample_single_axis_commands = True
+   # Jointly train quiet four-leg standing and locomotion under one policy.
+   # This gives the hybrid controller enough zero-command transitions without
+diff --git a/src/mjlab/tasks/velocity/config/g23/__init__.py b/src/mjlab/tasks/velocity/config/g23/__init__.py
+index 32489bf..8ae99ea 100644
+--- a/src/mjlab/tasks/velocity/config/g23/__init__.py
++++ b/src/mjlab/tasks/velocity/config/g23/__init__.py
+@@ -3,12 +3,21 @@ from mjlab.tasks.velocity.rl import VelocityOnPolicyRunner
+ 
+ from .env_cfgs import (
+   syncai_g23_flat_proprio_env_cfg,
++  syncai_g23_flat_stand_history6_env_cfg,
+   syncai_g23_rough_env_cfg,
+   syncai_g23_rough_proprio_env_cfg,
+   syncai_g23_rough_proprio_history6_env_cfg,
+ )
+ from .rl_cfg import syncai_g23_ppo_runner_cfg
+ 
++register_mjlab_task(
++  task_id="Mjlab-Velocity-Flat-SyncAI-G23-Proprio-History6-Stand",
++  env_cfg=syncai_g23_flat_stand_history6_env_cfg(),
++  play_env_cfg=syncai_g23_flat_stand_history6_env_cfg(play=True),
++  rl_cfg=syncai_g23_ppo_runner_cfg(experiment_name="g23_velocity_proprio_history6"),
++  runner_cls=VelocityOnPolicyRunner,
++)
++
+ register_mjlab_task(
+   task_id="Mjlab-Velocity-Rough-SyncAI-G23",
+   env_cfg=syncai_g23_rough_env_cfg(),
+diff --git a/src/mjlab/tasks/velocity/config/g23/env_cfgs.py b/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+index 85a1182..cc70a01 100644
+--- a/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
++++ b/src/mjlab/tasks/velocity/config/g23/env_cfgs.py
+@@ -608,6 +608,52 @@ def syncai_g23_rough_proprio_history6_env_cfg(
+   return cfg
+ 
+ 
++def syncai_g23_flat_stand_history6_env_cfg(
++  play: bool = False,
++) -> ManagerBasedRlEnvCfg:
++  """Fine-tune stopping in the default stance, retaining checkpoint observations."""
++  cfg = syncai_g23_rough_proprio_history6_env_cfg(play=play)
++  assert cfg.scene.terrain is not None
++  cfg.scene.terrain.terrain_type = "plane"
++  cfg.scene.terrain.terrain_generator = None
++  # Keep the rough-task sensors and critic terms for checkpoint compatibility.
++  cfg.curriculum = {}
++  cfg.events.pop("randomize_terrain", None)
++  cfg.events.pop("push_robot", None)
++  cfg.terminations.pop("out_of_terrain_bounds", None)
++
++  twist = cfg.commands["twist"]
++  assert isinstance(twist, UniformVelocityCommandCfg)
++  twist.rel_standing_envs = 1.0 if play else 0.7
++  twist.heading_command = False
++  twist.ranges.heading = None
++  twist.rel_heading_envs = 0.0
++  twist.rel_world_envs = 0.0
++  twist.rel_forward_envs = 0.0
++  twist.rel_backward_envs = 0.0
++  twist.init_velocity_prob = 0.0
++  twist.ranges.lin_vel_x = (-0.4, 0.4)
++  twist.ranges.lin_vel_y = (-0.2, 0.2)
++  twist.ranges.ang_vel_z = (-0.3, 0.3)
++  twist.resampling_time_range = (4.0, 8.0)
++
++  cfg.rewards["standing_joint_deviation"] = RewardTermCfg(
++    func=mdp.standing_joint_deviation_l2,
++    weight=-3.0,
++    params={"command_name": "twist"},
++  )
++  cfg.rewards["standing_joint_velocity"] = RewardTermCfg(
++    func=mdp.standing_joint_velocity_l2,
++    weight=-0.05,
++    params={"command_name": "twist"},
++  )
++  cfg.rewards["standing_missing_foot_contacts"].weight = -2.0
++  # Include zero commands in the existing foot-slip cost.
++  cfg.rewards["foot_slip"].params["command_threshold"] = -1.0
++  cfg.rewards["body_ang_vel"].weight = -0.1
++  return cfg
++
++
+ def syncai_g23_flat_proprio_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+   """Create SyncAI G23 flat terrain config with compact proprioception."""
+   cfg = syncai_g23_flat_env_cfg(play=play)
+diff --git a/src/mjlab/tasks/velocity/mdp/rewards.py b/src/mjlab/tasks/velocity/mdp/rewards.py
+index 67dc02d..3b319e2 100644
+--- a/src/mjlab/tasks/velocity/mdp/rewards.py
++++ b/src/mjlab/tasks/velocity/mdp/rewards.py
+@@ -96,6 +96,45 @@ def track_angular_velocity_yaw(
+   return torch.exp(-error / std**2)
+ 
+ 
++def standing_joint_deviation_l2(
++  env: ManagerBasedRlEnv,
++  command_name: str,
++  command_threshold: float = 0.05,
++  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++) -> torch.Tensor:
++  """Penalize deviation from the default joint pose only at zero command."""
++  asset: Entity = env.scene[asset_cfg.name]
++  command = env.command_manager.get_command(command_name)
++  assert command is not None
++  standing = (
++    torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2]) <= command_threshold
++  )
++  error = (
++    asset.data.joint_pos[:, asset_cfg.joint_ids]
++    - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
++  )
++  return torch.sum(torch.square(error), dim=1) * standing
++
++
++def standing_joint_velocity_l2(
++  env: ManagerBasedRlEnv,
++  command_name: str,
++  command_threshold: float = 0.05,
++  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++) -> torch.Tensor:
++  """Suppress joint motion at zero command without penalizing walking."""
++  asset: Entity = env.scene[asset_cfg.name]
++  command = env.command_manager.get_command(command_name)
++  assert command is not None
++  standing = (
++    torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2]) <= command_threshold
++  )
++  return (
++    torch.sum(torch.square(asset.data.joint_vel[:, asset_cfg.joint_ids]), dim=1)
++    * standing
++  )
++
++
+ def vertical_velocity_l2(
+   env: ManagerBasedRlEnv,
+   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+diff --git a/tests/test_velocity_rewards.py b/tests/test_velocity_rewards.py
+index 0336dba..26add07 100644
+--- a/tests/test_velocity_rewards.py
++++ b/tests/test_velocity_rewards.py
+@@ -17,6 +17,8 @@ from mjlab.tasks.velocity.mdp.rewards import (
+   feet_contact_count_standing,
+   feet_excessive_air_time,
+   feet_swing_height,
++  standing_joint_deviation_l2,
++  standing_joint_velocity_l2,
+   track_angular_velocity_yaw,
+   track_linear_velocity_xy,
+   upright,
+@@ -25,6 +27,31 @@ from mjlab.tasks.velocity.mdp.rewards import (
+ from mjlab.utils.lab_api.math import quat_from_euler_xyz
+ 
+ 
++@pytest.mark.parametrize(
++  "reward", [standing_joint_deviation_l2, standing_joint_velocity_l2]
++)
++def test_standing_joint_costs_gate_translation_and_rotation(reward):
++  data = SimpleNamespace(
++    joint_pos=torch.tensor([[0.4, -0.65, 1.3]]).repeat(4, 1),
++    default_joint_pos=torch.tensor([[0.0, -0.65, 1.3]]).repeat(4, 1),
++    joint_vel=torch.tensor([[0.4, 0.0, 0.0]]).repeat(4, 1),
++  )
++  env = SimpleNamespace(
++    scene={"robot": SimpleNamespace(data=data)},
++    command_manager=SimpleNamespace(
++      get_command=lambda _: torch.tensor(
++        [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.0, 0.1], [0.0, 0.05, 0.0]]
++      )
++    ),
++  )
++  torch.testing.assert_close(reward(env, "twist"), torch.tensor([0.16, 0.0, 0.0, 0.16]))
++  # Unselected joints must not contribute; resting at the nonzero default is free.
++  torch.testing.assert_close(
++    reward(env, "twist", asset_cfg=SceneEntityCfg("robot", joint_ids=[1, 2])),
++    torch.zeros(4),
++  )
++
++
+ def _identity_quat(B: int) -> torch.Tensor:
+   """(w, x, y, z) = (1, 0, 0, 0)."""
+   q = torch.zeros(B, 4)
+diff --git a/tests/test_velocity_task.py b/tests/test_velocity_task.py
+index 555f1ad..d848943 100644
+--- a/tests/test_velocity_task.py
++++ b/tests/test_velocity_task.py
+@@ -1,5 +1,7 @@
+ """Tests specific to velocity tasks."""
+ 
++from dataclasses import asdict
++
+ import pytest
+ 
+ from mjlab.asset_zoo.robots import G1_ACTION_SCALE, G23_ACTION_SCALE, GO1_ACTION_SCALE
+@@ -10,6 +12,21 @@ from mjlab.tasks.velocity.config.g23.rl_cfg import syncai_g23_ppo_runner_cfg
+ from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
+ 
+ 
++def test_g23_stand_preserves_history6_observations_and_zero_command_play():
++  original = load_env_cfg("Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6")
++  task = "Mjlab-Velocity-Flat-SyncAI-G23-Proprio-History6-Stand"
++  cfg = load_env_cfg(task)
++  assert asdict(cfg.observations["actor"]) == asdict(original.observations["actor"])
++  assert asdict(cfg.observations["critic"]) == asdict(original.observations["critic"])
++  assert cfg.curriculum == {}
++  assert "push_robot" not in cfg.events
++  assert cfg.commands["twist"].rel_standing_envs == 0.7
++  play_cfg = load_env_cfg(task, play=True)
++  assert play_cfg.commands["twist"].rel_standing_envs == 1.0
++  assert not play_cfg.commands["twist"].heading_command
++  assert "randomize_terrain" not in play_cfg.events
++
++
+ @pytest.fixture(scope="module")
+ def velocity_task_ids() -> list[str]:
+   """Get all velocity task IDs."""
+diff --git a/thirdparty/rl-mpc-locomotion/MPC_Controller/convex_MPC/ConvexMPCLocomotion.py b/thirdparty/rl-mpc-locomotion/MPC_Controller/convex_MPC/ConvexMPCLocomotion.py
+index 516a2de..1ce1531 100644
+--- a/thirdparty/rl-mpc-locomotion/MPC_Controller/convex_MPC/ConvexMPCLocomotion.py
++++ b/thirdparty/rl-mpc-locomotion/MPC_Controller/convex_MPC/ConvexMPCLocomotion.py
+@@ -1262,7 +1262,7 @@ class ConvexMPCLocomotion:
+             self._home_foot_positions[:] = self.foot_positions
+             data._stateEstimator._init_contact_history(self.foot_positions)
+             for i in range(4):
+-                self.footSwingTrajectories[i].setHeight(0.05)
++                self.footSwingTrajectories[i].setHeight(0.06)
+                 self.footSwingTrajectories[i].setHoldPosition(self.pFoot[i])
+ 
+         if self._hold_feet_requested:
+@@ -1306,8 +1306,8 @@ class ConvexMPCLocomotion:
+             else:
+                 self.swingTimeRemaining[i] -= self.dt
+ 
+-            # self.footSwingTrajectories[i].setHeight(0.2)
+-            self.footSwingTrajectories[i].setHeight(self._body_height/3)
++            # Keep swing clearance independent of the target body height.
++            self.footSwingTrajectories[i].setHeight(0.06)
+             
+             offset = np.array([0, getSideSign(i)*data._quadruped._abadLinkLength, 0], dtype=DTYPE).reshape((3,1))
+             pRobotFrame = data._quadruped.getHipLocation(i) + offset
+diff --git a/thirdparty/rl-mpc-locomotion/RL_Environment/cfg/task/G23.yaml b/thirdparty/rl-mpc-locomotion/RL_Environment/cfg/task/G23.yaml
+index 023aa08..5918bce 100644
+--- a/thirdparty/rl-mpc-locomotion/RL_Environment/cfg/task/G23.yaml
++++ b/thirdparty/rl-mpc-locomotion/RL_Environment/cfg/task/G23.yaml
+@@ -21,7 +21,7 @@ env:
+     vLinear: [0.0, 0.0, 0.0]  # x,y,z [m/s]
+     vAngular: [0.0, 0.0, 0.0] # x,y,z [rad/s]
+ 
+-  bodyHeight: 0.28 # MPC target body height [m]
++  bodyHeight: 0.32 # MPC target body height [m]
+ 
+   # In-process MPC used while collecting PPO rollouts: native or syncai.
+   mpcBackend: native

@@ -13,6 +13,7 @@ from mjlab.sensor import BuiltinSensor, ContactSensor
 from mjlab.sensor.terrain_height_sensor import TerrainHeightSensor
 from mjlab.tasks.velocity.mdp.terrain_utils import (
   terrain_normal_from_sensors,
+  terrain_step_height_lookup,
   terrain_type_lookup,
 )
 from mjlab.utils.lab_api.math import quat_apply, quat_apply_inverse, wrap_to_pi
@@ -100,19 +101,56 @@ def track_angular_velocity_yaw(
   return torch.exp(-error / std**2)
 
 
+def _settled(
+  env: ManagerBasedRlEnv, command_name: str, settle_time_s: float
+) -> torch.Tensor | None:
+  """Mask envs whose command has been stationary for ``settle_time_s``.
+
+  Returns None when no settling time is requested. Requires a command term that
+  tracks ``stationary_time`` (see ``UniformVelocityCommand``).
+  """
+  if settle_time_s <= 0.0:
+    return None
+  term = env.command_manager.get_term(command_name)
+  stationary_time = getattr(term, "stationary_time", None)
+  if not isinstance(stationary_time, torch.Tensor):
+    raise TypeError(
+      f"settle_time_s needs command '{command_name}' to track stationary_time."
+    )
+  return stationary_time >= settle_time_s
+
+
 def standing_joint_deviation_l2(
   env: ManagerBasedRlEnv,
   command_name: str,
   command_threshold: float = 0.05,
+  settle_time_s: float = 0.0,
+  foot_height_sensor_name: str | None = None,
+  level_tolerance: float = 0.03,
   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
 ) -> torch.Tensor:
-  """Penalize deviation from the default joint pose only at zero command."""
+  """Penalize deviation from the default joint pose only at zero command.
+
+  With ``settle_time_s`` the penalty starts once the command has been stationary
+  that long. With ``foot_height_sensor_name`` (a per-foot TerrainHeightSensor) it
+  applies only while the ground under all feet lies within ``level_tolerance``
+  meters, since the default pose cannot be held across stair treads.
+  """
   asset: Entity = env.scene[asset_cfg.name]
   command = env.command_manager.get_command(command_name)
   assert command is not None
   standing = (
     torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2]) <= command_threshold
   )
+  settled = _settled(env, command_name, settle_time_s)
+  if settled is not None:
+    standing = standing & settled
+  if foot_height_sensor_name is not None:
+    sensor = env.scene[foot_height_sensor_name]
+    assert isinstance(sensor, TerrainHeightSensor)
+    ground = sensor.data.frame_pos_w[..., 2] - sensor.data.heights  # [B, F]
+    spread = ground.max(dim=1).values - ground.min(dim=1).values
+    standing = standing & (spread <= level_tolerance)
   error = (
     asset.data.joint_pos[:, asset_cfg.joint_ids]
     - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
@@ -124,15 +162,23 @@ def standing_joint_velocity_l2(
   env: ManagerBasedRlEnv,
   command_name: str,
   command_threshold: float = 0.05,
+  settle_time_s: float = 0.0,
   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
 ) -> torch.Tensor:
-  """Suppress joint motion at zero command without penalizing walking."""
+  """Suppress joint motion at zero command without penalizing walking.
+
+  With ``settle_time_s`` the penalty starts once the command has been stationary
+  that long, leaving time for corrective steps after stopping.
+  """
   asset: Entity = env.scene[asset_cfg.name]
   command = env.command_manager.get_command(command_name)
   assert command is not None
   standing = (
     torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2]) <= command_threshold
   )
+  settled = _settled(env, command_name, settle_time_s)
+  if settled is not None:
+    standing = standing & settled
   return (
     torch.sum(torch.square(asset.data.joint_vel[:, asset_cfg.joint_ids]), dim=1)
     * standing
@@ -218,6 +264,8 @@ class motor_heat_l2:
   Copper loss scales with torque squared, so each actuator contributes its heating
   relative to its continuous rating (1.0 = rated load). ``rated_torque`` maps
   actuator-name regexes to rated torques; every actuator must match one entry.
+  With ``threshold`` each actuator only contributes the load above that level, so
+  ``threshold=1.0`` charges just the heating beyond the continuous rating.
   """
 
   def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
@@ -236,12 +284,14 @@ class motor_heat_l2:
     self,
     env: ManagerBasedRlEnv,
     rated_torque: dict[str, float],
+    threshold: float = 0.0,
     asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
   ) -> torch.Tensor:
     del rated_torque  # Resolved in __init__.
     asset: Entity = env.scene[asset_cfg.name]
     torque = asset.data.actuator_force
-    return torch.sum(torch.square(torque) * self._inv_rated_sq, dim=1)
+    load = torch.square(torque) * self._inv_rated_sq
+    return torch.sum(torch.clamp(load - threshold, min=0.0), dim=1)
 
 
 class upright:
@@ -485,12 +535,15 @@ def feet_contact_count_standing(
   command_name: str,
   required_contacts: int,
   command_threshold: float = 0.05,
+  settle_time_s: float = 0.0,
 ) -> torch.Tensor:
   """Penalize missing foot contacts while the commanded motion is stationary.
 
   ``found`` is a per-contact-slot tensor.  Sensors with multiple slots per
   primary are reduced using an any-slot rule before contacts are counted, so a
-  foot can contribute at most one contact regardless of ``num_slots``.
+  foot can contribute at most one contact regardless of ``num_slots``.  With
+  ``settle_time_s`` the penalty starts once the command has been stationary that
+  long, so the robot may lift a foot to correct its stance right after stopping.
   """
   if isinstance(required_contacts, bool) or not isinstance(required_contacts, int):
     raise TypeError(
@@ -524,6 +577,9 @@ def feet_contact_count_standing(
 
   command_magnitude = torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2])
   standing = command_magnitude <= command_threshold
+  settled = _settled(env, command_name, settle_time_s)
+  if settled is not None:
+    standing = standing & settled
   contact_count = torch.sum(in_contact, dim=1)
   missing = torch.clamp(required_contacts - contact_count, min=0).to(command.dtype)
   cost = missing * standing.to(command.dtype)
@@ -579,7 +635,7 @@ def _contact_metric_name(primary_name: str, primary_idx: int) -> str:
 
 def feet_clearance(
   env: ManagerBasedRlEnv,
-  target_height: float,
+  target_height: float | torch.Tensor,
   height_sensor_name: str,
   command_name: str | None = None,
   command_threshold: float = 0.01,
@@ -626,7 +682,7 @@ class feet_swing_height:
     env: ManagerBasedRlEnv,
     sensor_name: str,
     height_sensor_name: str,
-    target_height: float,
+    target_height: float | torch.Tensor,
     command_name: str,
     command_threshold: float,
   ) -> torch.Tensor:
@@ -665,6 +721,97 @@ class feet_swing_height:
   def reset(self, env_ids: torch.Tensor) -> None:
     """Clear peak-height history only for environments being reset."""
     self.peak_heights[env_ids] = 0.0
+
+
+# 2026-10-16 stair-goals update: a fixed swing target sits below the tallest
+# risers, so raise it with the riser height of the env's current stair patch.
+class _StairClearanceTarget:
+  """Per-env clearance target: ``step height + margin``, clamped to a range.
+
+  Envs off ``terrain_names`` (and all envs without curriculum terrain) use the
+  base target.
+  """
+
+  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
+    params = cfg.params
+    if params["max_target_height"] < params["target_height"]:
+      raise ValueError("max_target_height must not be below target_height.")
+    self._lookup = terrain_step_height_lookup(env, params["terrain_names"])
+
+  def target(
+    self,
+    env: ManagerBasedRlEnv,
+    target_height: float,
+    step_height_margin: float,
+    max_target_height: float,
+  ) -> float | torch.Tensor:
+    if self._lookup is None:
+      return target_height
+    terrain = env.scene.terrain
+    assert terrain is not None
+    step_height = self._lookup[terrain.terrain_levels, terrain.terrain_types]
+    target = torch.clamp(
+      step_height + step_height_margin, min=target_height, max=max_target_height
+    )
+    return target.unsqueeze(1)
+
+
+class feet_clearance_stair_adaptive:
+  """:func:`feet_clearance` with a target raised on tall stair risers."""
+
+  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
+    self._target = _StairClearanceTarget(cfg, env)
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    target_height: float,
+    height_sensor_name: str,
+    terrain_names: tuple[str, ...],
+    step_height_margin: float,
+    max_target_height: float,
+    command_name: str | None = None,
+    command_threshold: float = 0.01,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+  ) -> torch.Tensor:
+    del terrain_names  # Resolved in __init__.
+    target = self._target.target(
+      env, target_height, step_height_margin, max_target_height
+    )
+    return feet_clearance(
+      env, target, height_sensor_name, command_name, command_threshold, asset_cfg
+    )
+
+
+class feet_swing_height_stair_adaptive:
+  """:class:`feet_swing_height` with a target raised on tall stair risers."""
+
+  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
+    self._swing = feet_swing_height(cfg, env)
+    self._target = _StairClearanceTarget(cfg, env)
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    sensor_name: str,
+    height_sensor_name: str,
+    target_height: float,
+    terrain_names: tuple[str, ...],
+    step_height_margin: float,
+    max_target_height: float,
+    command_name: str,
+    command_threshold: float,
+  ) -> torch.Tensor:
+    del terrain_names  # Resolved in __init__.
+    target = self._target.target(
+      env, target_height, step_height_margin, max_target_height
+    )
+    return self._swing(
+      env, sensor_name, height_sensor_name, target, command_name, command_threshold
+    )
+
+  def reset(self, env_ids: torch.Tensor) -> None:
+    self._swing.reset(env_ids)
 
 
 def feet_slip(

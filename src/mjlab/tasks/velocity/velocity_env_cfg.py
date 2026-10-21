@@ -5,7 +5,7 @@ Robot-specific configurations call the factory and customize as needed.
 """
 
 import math
-from dataclasses import replace
+from copy import deepcopy
 
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs import mdp as envs_mdp
@@ -419,7 +419,9 @@ def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
     scene=SceneCfg(
       terrain=TerrainEntityCfg(
         terrain_type="generator",
-        terrain_generator=replace(ROUGH_TERRAINS_CFG),
+        # Deep copy: robot configs tune sub-terrains in place, and a shallow copy
+        # would leak one robot's tuning into every other registered task.
+        terrain_generator=deepcopy(ROUGH_TERRAINS_CFG),
         max_init_terrain_level=5,
       ),
       sensors=(terrain_scan, foot_height_scan),

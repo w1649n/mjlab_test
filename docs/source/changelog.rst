@@ -8,6 +8,31 @@ Upcoming version (not yet released)
 Added
 ^^^^^
 
+- Added ``Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-J60-StairGoals``, which
+  extends the J60 stair task for the heading, 20 cm stair, stopping and motor
+  heating goals. Straight forward/backward commands hold their starting heading
+  through ``ang_vel_z`` (gain 3.0, matching a deployed IMU heading hold), and
+  narrow yaw-rate and planar-velocity rewards make small corrections and slow
+  commands worth tracking. Stairs span 5-25 cm, terrain levels move with
+  ``terrain_levels_tracked``, and the swing height target rises with the riser
+  height. After a stop the robot is pulled toward its default pose on level
+  ground only, and gets 1 s to settle its feet before joint motion and lifted
+  feet are charged. A light ``motor_heat_l2`` term with ``threshold=1.0`` charges
+  heating above the J60 rating, PPO adds left-right mirrored samples, and the
+  entropy coefficient is 0.003 for fine-tuning. Actor observations match
+  StairYaw-J60, so its checkpoints can be resumed directly.
+
+- Added ``symmetry_cfg`` to ``RslRlPpoAlgorithmCfg`` for rsl_rl symmetry data
+  augmentation and mirror loss, and the G23 mirror function
+  ``mjlab.tasks.velocity.config.g23.symmetry:mirror_g23_velocity``.
+
+- Added velocity command options ``directional_heading_hold`` and
+  ``stationary_command_threshold``. The command now tracks ``stationary_time`` and
+  each episode's commanded path and progress, used by the new
+  ``terrain_levels_tracked`` curriculum and the ``settle_time_s`` option of the
+  standing rewards. ``standing_joint_deviation_l2`` can also be limited to level
+  ground with ``foot_height_sensor_name``.
+
 - Added ``Mjlab-Velocity-Rough-SyncAI-G23-Proprio-History6-StairYaw-J60``, which
   limits G23 joint torque to the J60 torque-speed curve (peak 19.94 / 30.5 Nm,
   no-load 24.18 / 15.49 rad/s, with J60 rotor inertia), raises the stair heading
@@ -76,6 +101,10 @@ Changed
 
 Fixed
 ^^^^^
+
+- Velocity tasks no longer share sub-terrain configs. Tuning applied by one robot
+  (for example the G23 stair heights and terrain proportions) previously leaked
+  into every other registered rough task, including Unitree G1 and Go1.
 
 - Preserved the scheduled support pair through a transient contact-sensor gap
   at the G23 RL-MPC TROT-to-STOPPING boundary, while confirmed STAND contact

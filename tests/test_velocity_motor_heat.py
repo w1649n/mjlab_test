@@ -40,3 +40,13 @@ def test_motor_heat_requires_a_rating_for_every_actuator():
   cfg = RewardTermCfg(func=mdp.motor_heat_l2, weight=-1.0, params=params)
   with pytest.raises(ValueError, match="Tail"):
     mdp.motor_heat_l2(cfg, env)
+
+
+def test_motor_heat_threshold_charges_only_load_above_rating():
+  env = _make_env([[12.0, 3.0, 9.0]])
+  params = {"rated_torque": _RATED, "threshold": 1.0}
+  cfg = RewardTermCfg(func=mdp.motor_heat_l2, weight=-1.0, params=params)
+  reward = mdp.motor_heat_l2(cfg, env)
+  # Loads are 4.0, 0.25 and 1.0 times the rating; only 4.0 exceeds it.
+  loads = reward(env, rated_torque=_RATED, threshold=1.0)
+  torch.testing.assert_close(loads, torch.tensor([3.0]))
