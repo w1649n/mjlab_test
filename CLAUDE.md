@@ -58,3 +58,10 @@ Some style guidelines to follow:
   - Use functions and fixtures; do not use test classes.
   - Favor targeted, efficient tests over exhaustive edge-case coverage.
   - Prefer running individual tests rather than the full test suite to improve iteration speed.
+
+# Navigation task (rl_agv branch)
+
+The hospital navigation task ported from mujoco-rl-nav lives in
+`src/mjlab/tasks/navigation/`. Read `src/mjlab/tasks/navigation/README.md` before
+changing it: it covers the design, the differences from the original project, the
+training workflow and the known issues.
