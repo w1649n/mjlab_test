@@ -5,6 +5,13 @@ Changelog
 Upcoming version (not yet released)
 -----------------------------------
 
+Added
+^^^^^
+
+- Added the ``Mjlab-Navigation-Hospital`` and ``Mjlab-Navigation-Hospital-Humans``
+  tasks: lidar-based goal reaching for a unicycle robot in a hospital floor,
+  optionally among pedestrians driven by a social force model.
+
 Changed
 ^^^^^^^
 
